@@ -1,0 +1,24 @@
+# Example flow for testing
+name: example-flow
+description: Example flow demonstrating various steps
+
+variables:
+  base_url: "https://example.com"
+
+steps:
+  - type: navigate
+    url: "${base_url}"
+
+  - type: screenshot
+    file: "01-homepage.png"
+
+  - type: set-viewport
+    width: 1920
+    height: 1080
+
+  - type: scroll
+    direction: down
+    distance: 500
+
+  - type: screenshot
+    file: "02-scrolled.png"
