@@ -1,6 +1,6 @@
 [project]
 name = "pomelo-pw"
-version = "0.2.2"
+version = "0.2.3"
 description = "Flow-based UI automation tool powered by Playwright"
 readme = "README.md"
 requires-python = ">=3.11"

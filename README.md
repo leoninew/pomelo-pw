@@ -33,6 +33,18 @@ uv pip install pillow
 
 ## Quick Start
 
+### Interactive Tools
+
+```bash
+# Explore a page interactively to discover selectors
+pomelo-pw explore https://example.com
+
+# Record user interactions to generate a flow
+pomelo-pw record https://example.com output.yaml
+```
+
+### Create and Run Flows
+
 Create a flow file `my-flow.yaml`:
 
 ```yaml
@@ -64,6 +76,72 @@ uvx pomelo-pw run my-flow.yaml
 ```
 
 ## Usage
+
+### Interactive Tools
+
+#### Page Explorer
+
+Discover element selectors interactively:
+
+```bash
+# Launch explorer
+pomelo-pw explore https://example.com
+
+# Run in headless mode
+pomelo-pw explore https://example.com --headless
+```
+
+**Features**:
+- Hover over elements to see available selectors
+- Click an element to display all selector options in terminal
+- Selector priority: data-test > id > role > text > class > css > xpath
+- Visual overlay shows selectors in real-time
+
+**Use cases**:
+- Find the best selector for an element
+- Understand page structure
+- Debug selector issues
+- Learn Playwright selector syntax
+
+#### Flow Recorder
+
+Record user interactions to generate YAML flows:
+
+```bash
+# Record a flow
+pomelo-pw record https://example.com output.yaml
+
+# Run in headless mode
+pomelo-pw record https://example.com output.yaml --headless
+```
+
+**Recorded actions**:
+- Click: Automatically records click events
+- Fill: Records text input in form fields
+- Press: Records Enter key presses
+
+**Features**:
+- Real-time step counter
+- Automatic selector generation (best selector chosen)
+- Generates clean YAML flow file
+- Press Ctrl+C to stop and save
+
+**Example output**:
+```yaml
+name: output
+description: Recorded flow from https://example.com
+steps:
+  - type: navigate
+    url: https://example.com
+  - type: click
+    selector: role=button[name="Get started"]
+  - type: fill
+    selector: "#email"
+    value: user@example.com
+  - type: press
+    selector: "#email"
+    key: Enter
+```
 
 ### Basic Commands
 

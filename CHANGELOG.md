@@ -5,6 +5,26 @@ All notable changes to Pomelo PW will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2025-01-XX
+
+### Added
+- **Interactive page explorer**: `pomelo-pw explore <url>`
+  - Hover over elements to see available selectors
+  - Click to display selector options in terminal
+  - Selector priority: data-test > id > role > text > class > css > xpath
+  - Visual overlay with real-time selector display
+- **Flow recorder**: `pomelo-pw record <url> <output.yaml>`
+  - Record click, fill, and press actions
+  - Automatic selector generation
+  - Real-time step counter
+  - Generates clean YAML flow files
+
+### Use Cases
+- Discover element selectors without guessing
+- Generate flows from manual testing
+- Debug selector issues
+- Learn Playwright selector syntax
+
 ## [0.2.2] - 2025-01-XX
 
 ### Added

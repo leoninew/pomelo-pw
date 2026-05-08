@@ -166,5 +166,42 @@ def spec(step_type: str) -> None:
         click.echo(f"  - {p}: {default}")
 
 
+@cli.command()
+@click.argument("url")
+@click.option("--headless", is_flag=True, help="Run in headless mode")
+def explore(url: str, headless: bool) -> None:
+    """Launch interactive page explorer to discover selectors.
+    
+    Hover over elements to see available selectors.
+    Click an element to display its selectors in the terminal.
+    """
+    from pomelo_pw.explorer import explore_page
+    
+    try:
+        asyncio.run(explore_page(url, headless=headless))
+    except KeyboardInterrupt:
+        pass
+
+
+@cli.command()
+@click.argument("url")
+@click.argument("output", type=click.Path())
+@click.option("--headless", is_flag=True, help="Run in headless mode")
+def record(url: str, output: str, headless: bool) -> None:
+    """Record user interactions and generate a YAML flow.
+    
+    Click elements to record click actions.
+    Type in inputs to record fill actions.
+    Press Enter to record key press.
+    Press Ctrl+C to stop and save the flow.
+    """
+    from pomelo_pw.recorder import record_flow
+    
+    try:
+        asyncio.run(record_flow(url, output, headless=headless))
+    except KeyboardInterrupt:
+        pass
+
+
 if __name__ == "__main__":
     cli()

@@ -172,6 +172,34 @@ steps:
 
 ## Phase 3: 中期实施 (2-4 周)
 
+### 5. 页面快照/Locator 探索 ✅ COMPLETED
+
+**新增命令**:
+```bash
+pomelo-pw explore <url>            # 交互式探索模式
+pomelo-pw record <url> <output>    # 录制模式，生成 YAML
+```
+
+**功能**:
+- 点击元素自动生成最佳 selector
+- 实时显示多种 selector 选项（id、class、text、role、xpath）
+- 录制模式：点击操作自动生成 YAML 步骤
+- 参考 Playwright Inspector
+
+**已完成**:
+- ✅ 实现 PageExplorer 类（交互式探索）
+- ✅ 实现 FlowRecorder 类（录制生成 YAML）
+- ✅ 注入浏览器 UI overlay
+- ✅ 自动生成最佳 selector（优先级：data-test > id > role > text > class > css > xpath）
+- ✅ 支持 hover 预览和 click 选择
+- ✅ 录制 click、fill、press 操作
+- ✅ CLI 命令：explore 和 record
+- ✅ 更新文档（README.md）
+
+**文件**: `src/pomelo_pw/explorer.py`, `src/pomelo_pw/recorder.py`, `src/pomelo_pw/cli.py`
+
+---
+
 ### 6. 登录态复用 ✅ COMPLETED
 
 **新增 steps**:
@@ -313,7 +341,8 @@ parallel:
 
 ## 版本规划
 
-- **v0.2.0**: Phase 1 (变量转义 + 失败上下文)
-- **v0.3.0**: Phase 2 (SPA 等待 + Retry)
-- **v0.4.0**: Phase 3 (Explorer + 登录态)
-- **v0.5.0**: Phase 4 (Baseline Diff)
+- **v0.2.0**: Phase 1 (变量转义 + 失败上下文) ✅
+- **v0.2.2**: Phase 2 + Phase 3 partial + Phase 4 partial (SPA 等待 + Retry + 登录态 + Baseline Diff) ✅
+- **v0.2.3**: Phase 3 (Explorer + Recorder) ✅
+- **v0.3.0**: Phase 4 remaining (条件执行、循环、数据驱动)
+- **v0.4.0**: 并发执行 + 性能优化

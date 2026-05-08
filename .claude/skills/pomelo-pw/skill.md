@@ -8,6 +8,21 @@ This skill allows you to execute UI automation flows defined in YAML files.
 
 ## Commands
 
+### Interactive Tools
+
+- `pomelo-pw explore <url>` - Launch interactive page explorer
+  - Hover over elements to see selectors
+  - Click to display selector options
+  - Discover best selectors without guessing
+
+- `pomelo-pw record <url> <output.yaml>` - Record interactions to generate flow
+  - Click elements to record click actions
+  - Type in inputs to record fill actions
+  - Press Enter to record key press
+  - Press Ctrl+C to stop and save
+
+### Flow Execution
+
 - `pomelo-pw run <flow-file>` - Execute a flow
 - `pomelo-pw run <flow-file> -v` - Execute with verbose output
 - `pomelo-pw run <flow-file> --var key=value` - Override variables
