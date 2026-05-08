@@ -1,20 +1,17 @@
 # Pomelo PW Flow Templates
 
-## Quick Templates
+## Basic Templates
 
 ### 1. Simple Navigation and Screenshot
 
 ```yaml
 name: quick-capture
-description: Navigate to a URL and take a screenshot
-
 variables:
   url: "https://example.com"
 
 steps:
   - type: navigate
-    url: "${url}"
-
+    url: "{{url}}"
   - type: screenshot
     file: "capture.png"
 ```
@@ -23,8 +20,6 @@ steps:
 
 ```yaml
 name: login-test
-description: Test login functionality
-
 variables:
   base_url: "https://example.com"
   username: "user@example.com"
@@ -32,281 +27,389 @@ variables:
 
 steps:
   - type: navigate
-    url: "${base_url}/login"
-
-  - type: screenshot
-    file: "01-login-page.png"
-
+    url: "{{base_url}}/login"
   - type: fill
     selector: "input[name='email']"
-    value: "${username}"
-
+    value: "{{username}}"
   - type: fill
     selector: "input[name='password']"
-    value: "${password}"
-
+    value: "{{password}}"
   - type: click
     selector: "button[type='submit']"
-
   - type: wait
-    selector: ".dashboard"
-    timeout: 5000
-
+    url_contains: "/dashboard"
   - type: screenshot
-    file: "02-logged-in.png"
+    file: "logged-in.png"
 ```
 
-### 3. Form Submission
+### 3. Responsive Testing
+
+```yaml
+name: responsive-test
+variables:
+  url: "https://example.com"
+
+steps:
+  - type: navigate
+    url: "{{url}}"
+  - type: set-viewport
+    width: 1920
+    height: 1080
+  - type: screenshot
+    file: "desktop.png"
+  - type: set-viewport
+    width: 375
+    height: 667
+  - type: screenshot
+    file: "mobile.png"
+```
+
+### 4. Form Submission
 
 ```yaml
 name: form-submit
-description: Fill and submit a form
-
 variables:
   form_url: "https://example.com/contact"
 
 steps:
   - type: navigate
-    url: "${form_url}"
-
+    url: "{{form_url}}"
   - type: fill
     selector: "#name"
     value: "John Doe"
-
   - type: fill
     selector: "#email"
     value: "john@example.com"
-
-  - type: fill
-    selector: "#message"
-    value: "This is a test message"
-
   - type: check
     selector: "#agree-terms"
-
   - type: click
     selector: "button[type='submit']"
-
   - type: wait
     selector: ".success-message"
-
   - type: screenshot
-    file: "form-submitted.png"
+    file: "submitted.png"
 ```
 
-### 4. Multi-page Navigation
+---
+
+## Auth State Reuse
+
+### 5. Save Login State
 
 ```yaml
-name: multi-page-test
-description: Navigate through multiple pages
-
+name: save-auth
 variables:
   base_url: "https://example.com"
 
 steps:
   - type: navigate
-    url: "${base_url}"
-
-  - type: screenshot
-    file: "01-home.png"
-
+    url: "{{base_url}}/login"
+  - type: fill
+    selector: "#email"
+    value: "admin@example.com"
+  - type: fill
+    selector: "#password"
+    value: "secret"
   - type: click
-    selector: "a[href='/about']"
-
+    selector: "button[type='submit']"
   - type: wait
-    url: "/about"
-
+    url_contains: "/dashboard"
+  - type: save-state
+    file: "auth.json"
   - type: screenshot
-    file: "02-about.png"
-
-  - type: click
-    selector: "a[href='/contact']"
-
-  - type: wait
-    url: "/contact"
-
-  - type: screenshot
-    file: "03-contact.png"
+    file: "logged-in.png"
 ```
 
-### 5. Responsive Testing
+### 6. Reuse Login State
 
 ```yaml
-name: responsive-test
-description: Test responsive design at different viewport sizes
+name: test-with-auth
+variables:
+  base_url: "https://example.com"
 
+steps:
+  - type: load-state
+    file: "auth.json"
+  - type: navigate
+    url: "{{base_url}}/dashboard"
+  - type: screenshot
+    file: "dashboard.png"
+```
+
+---
+
+## Conditional Execution
+
+### 7. Handle Optional UI Elements
+
+```yaml
+name: handle-cookie-banner
 variables:
   url: "https://example.com"
 
 steps:
   - type: navigate
-    url: "${url}"
+    url: "{{url}}"
 
-  - type: set-viewport
-    width: 1920
-    height: 1080
-
-  - type: screenshot
-    file: "desktop.png"
-
-  - type: set-viewport
-    width: 768
-    height: 1024
+  # Dismiss cookie banner if present
+  - type: if
+    condition: "element_visible: .cookie-banner"
+    then:
+      - type: click
+        selector: ".accept-cookies"
+      - type: wait
+        animation_stable: true
 
   - type: screenshot
-    file: "tablet.png"
-
-  - type: set-viewport
-    width: 375
-    height: 667
-
-  - type: screenshot
-    file: "mobile.png"
+    file: "page-clean.png"
 ```
 
-### 6. Scroll and Capture
+### 8. Branch on Page State
+
+```yaml
+name: conditional-flow
+variables:
+  base_url: "https://example.com"
+
+steps:
+  - type: navigate
+    url: "{{base_url}}"
+
+  - type: if
+    condition: "url_contains: /login"
+    then:
+      - type: fill
+        selector: "#email"
+        value: "user@example.com"
+      - type: click
+        selector: "button[type='submit']"
+    else:
+      - type: screenshot
+        file: "already-logged-in.png"
+
+  - type: screenshot
+    file: "final-state.png"
+```
+
+---
+
+## Loop Execution
+
+### 9. Scroll Through Page
 
 ```yaml
 name: scroll-capture
-description: Scroll through page and capture sections
-
 variables:
   url: "https://example.com"
 
 steps:
   - type: navigate
-    url: "${url}"
+    url: "{{url}}"
+
+  - type: loop
+    times: 5
+    steps:
+      - type: scroll
+        direction: down
+        distance: 500
+      - type: wait
+        delay: 300
 
   - type: screenshot
-    file: "01-top.png"
-
-  - type: scroll
-    direction: down
-    distance: 500
-
-  - type: screenshot
-    file: "02-middle.png"
-
-  - type: scroll
-    direction: down
-    distance: 500
-
-  - type: screenshot
-    file: "03-bottom.png"
+    file: "bottom-of-page.png"
+    full_page: true
 ```
 
-### 7. Dropdown and Selection
+### 10. Load More Pagination
 
 ```yaml
-name: dropdown-test
-description: Test dropdown selections
-
+name: load-all-items
 variables:
-  url: "https://example.com/form"
+  url: "https://example.com/items"
 
 steps:
   - type: navigate
-    url: "${url}"
+    url: "{{url}}"
 
-  - type: select
-    selector: "#country"
-    value: "United States"
-
-  - type: select
-    selector: "#state"
-    value: "California"
+  - type: loop
+    while: "element_visible: .load-more-button"
+    max_iterations: 20
+    steps:
+      - type: click
+        selector: ".load-more-button"
+      - type: wait
+        network_idle: true
 
   - type: screenshot
-    file: "selections.png"
+    file: "all-items.png"
+    full_page: true
 ```
 
-### 8. JavaScript Evaluation
+---
+
+## Data-Driven Testing
+
+### 11. Multi-User Test
 
 ```yaml
-name: js-eval-test
-description: Execute JavaScript on the page
+name: multi-user-login
+variables:
+  base_url: "https://example.com"
 
+data:
+  - _label: "admin-user"
+    username: "admin@example.com"
+    password: "admin123"
+    expected_page: "/admin"
+  - _label: "regular-user"
+    username: "user@example.com"
+    password: "user123"
+    expected_page: "/dashboard"
+
+steps:
+  - type: navigate
+    url: "{{base_url}}/login"
+  - type: fill
+    selector: "#email"
+    value: "{{username}}"
+  - type: fill
+    selector: "#password"
+    value: "{{password}}"
+  - type: click
+    selector: "button[type='submit']"
+  - type: wait
+    url_contains: "{{expected_page}}"
+  - type: screenshot
+    file: "result.png"
+```
+
+### 12. Multi-Environment Check
+
+```yaml
+name: cross-env-check
+data:
+  - _label: "staging"
+    base_url: "https://staging.example.com"
+  - _label: "production"
+    base_url: "https://example.com"
+
+on_error: continue
+
+steps:
+  - type: navigate
+    url: "{{base_url}}"
+  - type: screenshot
+    file: "homepage.png"
+  - type: if
+    condition: "element_exists: .error-banner"
+    then:
+      - type: screenshot
+        file: "error-state.png"
+```
+
+---
+
+## Visual Regression
+
+### 13. Baseline Comparison
+
+```yaml
+name: visual-regression
 variables:
   url: "https://example.com"
 
 steps:
   - type: navigate
-    url: "${url}"
+    url: "{{url}}"
 
-  # Direct code (auto-wrapped)
-  - type: evaluate
-    script: "document.body.style.backgroundColor = 'lightblue'"
-
+  # First run: creates baseline
+  # Subsequent runs: compares against it
   - type: screenshot
-    file: "modified-page.png"
-
-  # Function expression
-  - type: evaluate
-    script: |
-      () => {
-        const title = document.title;
-        const url = window.location.href;
-        return { title, url };
-      }
-
-  # Direct code with return
-  - type: evaluate
-    script: "return document.title"
+    file: "homepage-current.png"
+    baseline: "homepage-baseline.png"
+    threshold: 0.02
+    diff_output: "homepage-diff.png"
+    fail_on_diff: true
 ```
 
-### 9. Wait Step Examples
+---
+
+## SPA / Dynamic Content
+
+### 14. SPA Navigation Wait
 
 ```yaml
-name: wait-examples
-description: Different ways to use the wait step
+name: spa-test
+variables:
+  base_url: "https://app.example.com"
 
 steps:
   - type: navigate
-    url: "https://example.com"
+    url: "{{base_url}}"
 
-  # Wait for element to appear (with timeout)
-  - type: wait
-    selector: ".loading-spinner"
-    timeout: 5000
+  - type: click
+    selector: "nav a[href='/dashboard']"
 
-  # Wait for URL change (with timeout)
   - type: wait
-    url: "/dashboard"
+    url_contains: "/dashboard"
+
+  - type: wait
+    network_idle: true
+
+  - type: wait
+    animation_stable: true
+
+  - type: screenshot
+    file: "dashboard.png"
+```
+
+### 15. Flaky Element with Retry
+
+```yaml
+name: retry-example
+variables:
+  url: "https://example.com"
+
+steps:
+  - type: navigate
+    url: "{{url}}"
+
+  - type: click
+    selector: ".async-button"
+    retry: 3
+    retry_delay: 1000
+
+  - type: wait
+    selector: ".result"
     timeout: 10000
+    retry: 2
 
-  # Fixed delay (use sparingly)
-  - type: wait
-    delay: 2000
-
-  # Wait for page load
-  - type: wait
-    for: "load"
-
-  # Wait for network idle
-  - type: wait
-    for: "networkidle"
+  - type: screenshot
+    file: "result.png"
 ```
 
-## Usage Tips
+---
 
-1. **Copy a template** that matches your use case
-2. **Modify variables** to match your target site
-3. **Adjust selectors** to match your HTML structure
-4. **Save as YAML** file (e.g., `my-flow.yaml`)
-5. **Run with**: `pomelo-pw run my-flow.yaml`
+## Common Selector Patterns
 
-## Wait Step Parameters
+```yaml
+# By ID
+selector: "#submit-button"
 
-- `timeout`: Maximum time to wait for a condition (default: 30000ms)
-  - Used with `selector`, `url`, or `for` parameters
-- `delay`: Fixed delay in milliseconds
-  - Use only when necessary (prefer condition-based waits)
+# By role (most reliable for interactive elements)
+selector: "role=button[name='Submit']"
+selector: "role=textbox[name='Email']"
+selector: "role=link[name='Sign in']"
 
-## Common Selectors
+# By text
+selector: "text=Accept all cookies"
 
-- By ID: `#element-id`
-- By class: `.class-name`
-- By attribute: `[name='field-name']`
-- By type: `button[type='submit']`
-- By text: `text=Click me`
-- By role: `role=button[name='Submit']`
+# By data-test attribute (best for test automation)
+selector: "[data-testid='submit-btn']"
+selector: "[data-test='login-form']"
+
+# By CSS
+selector: "button[type='submit']"
+selector: "input[name='email']"
+selector: ".modal .close-button"
+```

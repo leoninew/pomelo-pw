@@ -1,6 +1,6 @@
 {
   "name": "pomelo-pw",
-  "version": "0.2.1",
+  "version": "0.3.1",
   "description": "Flow-based UI automation tool powered by Playwright",
   "command": "pomelo-pw",
   "userInvocable": true,
@@ -8,12 +8,24 @@
   "categories": ["automation", "testing", "browser"],
   "examples": [
     {
+      "description": "Explore page interactively",
+      "command": "pomelo-pw explore https://example.com"
+    },
+    {
+      "description": "Record interactions to generate flow",
+      "command": "pomelo-pw record https://example.com output.yaml"
+    },
+    {
       "description": "Run a flow file",
       "command": "pomelo-pw run flows/example.yaml"
     },
     {
       "description": "Run with verbose output",
       "command": "pomelo-pw run flows/example.yaml -v"
+    },
+    {
+      "description": "Run data-driven flow",
+      "command": "pomelo-pw run flows/test-users.yaml"
     },
     {
       "description": "Validate a flow",
