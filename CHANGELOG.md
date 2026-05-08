@@ -5,6 +5,20 @@ All notable changes to Pomelo PW will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2025-01-XX
+
+### Added
+- **Data-driven testing**: Run a flow with multiple data sets
+  - Top-level `data` field accepts a list of variable sets
+  - Each row executes all steps with its own variables
+  - Each row outputs to its own subdirectory (`_label` or `row-N`)
+  - Row variables override base `variables`, enabling parameterized runs
+  - `on_error: continue` to keep running remaining rows on failure
+  - Aggregated result: `rows_total`, `rows_passed`, `rows_failed`, `row_results`
+
+### Changed
+- Refactored `FlowExecutor.run_flow` into `_run_once`, `_run_data_driven`, `_launch_browser` for cleaner separation
+
 ## [0.3.0] - 2025-01-XX
 
 ### Added

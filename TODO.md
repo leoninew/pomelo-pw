@@ -330,17 +330,34 @@ pomelo-pw record <url>             # 录制模式，生成 YAML
 
 ---
 
-### 9. 数据驱动测试 🔜 NEXT
+### 9. 数据驱动测试 ✅ COMPLETED
 ```yaml
 data:
-  - {username: "user1", password: "pass1"}
-  - {username: "user2", password: "pass2"}
+  - _label: "user-alice"
+    username: "alice"
+    search_term: "playwright"
+  - _label: "user-bob"
+    username: "bob"
+    search_term: "automation"
 
 steps:
   - type: fill
     selector: "#username"
     value: "{{username}}"
 ```
+
+**已完成**:
+- ✅ flow 顶层 `data` 字段支持多行数据
+- ✅ 每行数据独立执行一遍 steps
+- ✅ 每行输出到独立子目录（`_label` 或 `row-N`）
+- ✅ 行数据与 base vars 合并，行数据优先
+- ✅ 支持 `on_error: continue` 跨行继续执行
+- ✅ 聚合结果：rows_total / rows_passed / rows_failed
+- ✅ executor 重构：`_run_once` / `_run_data_driven` / `_launch_browser`
+- ✅ 单元测试覆盖核心场景
+- ✅ 创建示例 flow（test-data-driven.yaml）
+
+**文件**: `src/pomelo_pw/executor.py`, `tests/test_data_driven.py`
 
 ### 10. 并发执行
 ```yaml

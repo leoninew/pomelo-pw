@@ -481,6 +481,63 @@ Combine conditionals and loops for complex workflows:
           distance: 300
 ```
 
+### Data-Driven Testing
+
+Run the same flow with multiple data sets:
+
+```yaml
+name: login-test
+variables:
+  base_url: "https://example.com"
+
+data:
+  - _label: "user-alice"
+    username: "alice@example.com"
+    password: "pass1"
+  - _label: "user-bob"
+    username: "bob@example.com"
+    password: "pass2"
+
+steps:
+  - type: navigate
+    url: "{{base_url}}/login"
+  - type: fill
+    selector: "#email"
+    value: "{{username}}"
+  - type: fill
+    selector: "#password"
+    value: "{{password}}"
+  - type: screenshot
+    file: "login-{{username}}.png"
+```
+
+**How it works**:
+- Each row in `data` runs all steps independently
+- Row variables override `variables` on conflict
+- Each row outputs to its own subdirectory: `_label` value or `row-N`
+- `on_error: continue` keeps running remaining rows on failure (default: `stop`)
+
+**Result structure**:
+```json
+{
+  "success": true,
+  "data_driven": true,
+  "rows_total": 2,
+  "rows_passed": 2,
+  "rows_failed": 0,
+  "row_results": [
+    {"row": "user-alice", "success": true, ...},
+    {"row": "user-bob",   "success": true, ...}
+  ]
+}
+```
+
+**Use cases**:
+- Test multiple user accounts
+- Verify behavior across different locales or environments
+- Run the same visual check on multiple pages
+- Parameterized regression testing
+
 | `type` | `selector`, `value` | Type text character by character |
 | `press` | `key` | Press a keyboard key |
 | `wait` | - | Wait for conditions (selector, url, timeout) |
