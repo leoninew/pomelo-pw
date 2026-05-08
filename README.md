@@ -10,6 +10,7 @@ Flow-based UI automation tool powered by Playwright. Define your browser automat
 - **Rich error context**: Automatic screenshot, HTML snapshot, console/network errors on failure
 - **Enhanced SPA support**: URL pattern matching, network idle, animation stable, route stable waits
 - **Step-level retry**: Automatic retry with configurable delay and error type filtering
+- **Visual regression testing**: Screenshot baseline comparison with diff highlighting
 - **Extensible architecture**: Easy to add custom steps
 - **Development mode**: Automatically uses system Chrome when running from source (no slow downloads)
 - **Rich step library**: Navigate, click, fill, type, screenshot, scroll, and more
@@ -23,6 +24,11 @@ uvx pomelo-pw install
 # Or for development
 uv sync
 uv run pomelo-pw install
+
+# Optional: Install visual regression testing support
+pip install pomelo-pw[visual]
+# or with uv
+uv pip install pillow
 ```
 
 ## Quick Start
@@ -219,6 +225,51 @@ steps:
 - Faster test execution
 - Reduce load on authentication servers
 - Share authentication across multiple flows
+
+### Visual Regression Testing
+
+Compare screenshots against baselines to detect visual changes:
+
+```yaml
+# First run: create baseline
+- type: screenshot
+  file: "homepage.png"
+
+# Subsequent runs: compare with baseline
+- type: screenshot
+  file: "homepage-current.png"
+  baseline: "homepage.png"
+  threshold: 0.05  # Allow 5% difference
+  diff_output: "homepage-diff.png"
+  fail_on_diff: false  # Don't fail, just report
+
+# Strict comparison (fail on difference)
+- type: screenshot
+  file: "critical-page.png"
+  baseline: "critical-baseline.png"
+  threshold: 0.01  # Only 1% difference allowed
+  diff_output: "critical-diff.png"
+  fail_on_diff: true  # Fail if difference exceeds threshold
+```
+
+**Parameters**:
+- `baseline`: Path to baseline image (relative to output dir)
+- `threshold`: Allowed difference as decimal (0.05 = 5%)
+- `diff_output`: Path to save diff image (highlights differences in red)
+- `fail_on_diff`: Whether to fail the step if difference exceeds threshold
+
+**Requirements**: Install Pillow for visual comparison
+```bash
+pip install pomelo-pw[visual]
+# or
+uv pip install pillow
+```
+
+**Use cases**:
+- Detect unintended UI changes
+- Visual consistency checks across environments
+- Style regression testing
+- Component visual testing
 
 | `type` | `selector`, `value` | Type text character by character |
 | `press` | `key` | Press a keyboard key |

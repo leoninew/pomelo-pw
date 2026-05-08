@@ -236,7 +236,8 @@ pomelo-pw record <url>             # 录制模式，生成 YAML
 
 ## Phase 4: 长期实施 (1-2 月)
 
-### 7. 截图 Baseline Diff
+### 7. 截图 Baseline Diff ✅ COMPLETED
+
 **功能**:
 ```yaml
 - type: screenshot
@@ -244,11 +245,22 @@ pomelo-pw record <url>             # 录制模式，生成 YAML
   baseline: "baselines/homepage.png"
   threshold: 0.1                   # 允许 10% 差异
   diff_output: "diffs/homepage-diff.png"
+  fail_on_diff: true
 ```
 
-**技术**: 使用 `pixelmatch` 或 `Pillow` 做像素对比
+**技术**: 使用 Pillow 做像素对比
 
-**文件**: 扩展 `src/pomelo_pw/steps/screenshot.py`
+**已完成**:
+- ✅ 扩展 screenshot step 支持 baseline 参数
+- ✅ 实现像素级图片对比
+- ✅ 生成差异可视化图片（红色高亮）
+- ✅ 支持阈值配置
+- ✅ 支持 fail_on_diff 选项
+- ✅ 添加 Pillow 为可选依赖
+- ✅ 创建测试 flow（test-baseline-diff.yaml）
+- ✅ 更新文档
+
+**文件**: `src/pomelo_pw/steps/screenshot.py`
 
 ---
 

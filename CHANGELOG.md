@@ -24,10 +24,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `save-state`: Save cookies and localStorage to file
   - `load-state`: Load saved state to skip login
   - Useful for avoiding repeated logins across flows
+- **Visual regression testing**: Screenshot baseline comparison
+  - `baseline`: Compare screenshot with baseline image
+  - `threshold`: Allowed difference percentage
+  - `diff_output`: Save visual diff image (highlights differences in red)
+  - `fail_on_diff`: Fail step if difference exceeds threshold
+  - Requires Pillow (install with `pip install pomelo-pw[visual]`)
 
 ### Changed
 - `wait` step now supports more flexible conditions for SPA applications
 - All steps can now use retry parameters for improved reliability
+- `screenshot` step now supports baseline comparison for visual regression testing
 
 ### Examples
 ```yaml
@@ -47,6 +54,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   file: "auth.json"
 - type: load-state
   file: "auth.json"
+
+# Visual regression testing
+- type: screenshot
+  file: "page.png"
+  baseline: "baseline.png"
+  threshold: 0.05
+  diff_output: "diff.png"
 ```
 
 ## [0.2.1] - 2025-01-XX

@@ -1,0 +1,29 @@
+name: test-baseline-diff
+description: Test screenshot baseline comparison
+
+variables:
+  base_url: "https://example.com"
+
+steps:
+  - type: navigate
+    url: "{{base_url}}"
+
+  # First run: create baseline
+  - type: screenshot
+    file: "homepage.png"
+
+  # Subsequent runs: compare with baseline
+  - type: screenshot
+    file: "homepage-current.png"
+    baseline: "homepage.png"
+    threshold: 0.05  # Allow 5% difference
+    diff_output: "homepage-diff.png"
+    fail_on_diff: false  # Don't fail, just report
+
+  # Strict comparison (fail on difference)
+  - type: screenshot
+    file: "homepage-strict.png"
+    baseline: "homepage.png"
+    threshold: 0.01  # Only 1% difference allowed
+    diff_output: "homepage-strict-diff.png"
+    fail_on_diff: true  # Fail if difference exceeds threshold
