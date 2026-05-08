@@ -27,11 +27,27 @@ variables:
 
 steps:
   - type: navigate
-    url: "${var1}"
+    url: "{{var1}}"              # Recommended: {{ }} syntax
 
   - type: screenshot
     file: "output.png"
 ```
+
+### Variable Syntax
+
+**Recommended: `{{ }}` syntax** - Doesn't conflict with JS/Shell
+```yaml
+- type: evaluate
+  script: "const token = '{{api_token}}'; fetch(`/api?token=${token}`)"
+```
+
+**Legacy: `${ }` syntax** - Backward compatible
+```yaml
+- type: navigate
+  url: "${base_url}/login"
+```
+
+**Rule**: If a string contains `{{ }}`, only `{{ }}` is processed.
 
 ## Available Steps
 
@@ -118,7 +134,8 @@ steps:
 
 ## Tips
 
-- Use `${variable}` syntax for dynamic values
+- Use `{{variable}}` syntax for flow variables (recommended) or `${variable}` for backward compatibility
+- If using `{{ }}` in a string, `${ }` won't be processed (prevents JS/Shell conflicts)
 - Screenshots are saved to `./<flow-name>/` directory by default
   - Output directory name is derived from flow filename (e.g., `my-flow.yaml` → `./my-flow/`)
   - Path doesn't matter: `flows/test.yaml` → `./test/`, not `./flows/test/`

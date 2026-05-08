@@ -11,6 +11,7 @@ import yaml
 from playwright.async_api import async_playwright
 
 from pomelo_pw.config import load_app_config
+from pomelo_pw.error_context import ErrorContextCollector
 from pomelo_pw.steps import get_step
 from pomelo_pw.steps.base import StepContext
 from pomelo_pw.substitution import substitute_vars
@@ -115,6 +116,11 @@ class FlowExecutor:
                 viewport={"width": pw_config.viewport.width, "height": pw_config.viewport.height},
             )
             page = await context.new_page()
+            
+            # Setup error context collector
+            error_collector = ErrorContextCollector()
+            error_collector.setup_listeners(page)
+            
             click.echo("Browser ready, starting execution...")
 
             failed_step: dict[str, Any] | None = None
@@ -156,12 +162,33 @@ class FlowExecutor:
                     self._log(f"[{step_num}/{total_steps}] {result.message} end, cost {elapsed_ms} ms")
 
                 except Exception as e:
+                    # Collect error context
+                    error_context = await error_collector.collect_error_context(
+                        page=page,
+                        output_dir=output,
+                        step_index=idx,
+                        step_type=step_type,
+                    )
+                    
                     failed_step = {
                         "index": idx,
                         "type": step_type,
                         "error": str(e),
+                        "context": error_context.to_dict(),
                     }
+                    
                     click.echo(f"[{step_num}/{total_steps}] {step_type} FAILED: {e}", err=True)
+                    
+                    # Show error context summary
+                    if error_context.screenshot_path:
+                        click.echo(f"  Screenshot saved: {error_context.screenshot_path}", err=True)
+                    if error_context.html_snapshot_path:
+                        click.echo(f"  HTML snapshot saved: {error_context.html_snapshot_path}", err=True)
+                    if error_context.console_errors:
+                        click.echo(f"  Console errors: {len(error_context.console_errors)}", err=True)
+                    if error_context.network_errors:
+                        click.echo(f"  Network errors: {len(error_context.network_errors)}", err=True)
+                    click.echo(f"  Current URL: {error_context.url}", err=True)
 
                     # Error handling: stop by default
                     on_error = flow.get("on_error", "stop")

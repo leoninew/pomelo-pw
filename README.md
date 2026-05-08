@@ -6,7 +6,8 @@ Flow-based UI automation tool powered by Playwright. Define your browser automat
 
 - **Declarative YAML flows**: Define UI automation workflows in simple, readable YAML
 - **Type-safe steps**: Built-in validation for all step parameters
-- **Variable substitution**: Support for `${var}` syntax with multi-level priority
+- **Variable substitution**: Support for `{{ var }}` and `${ var }` syntax with multi-level priority
+- **Rich error context**: Automatic screenshot, HTML snapshot, console/network errors on failure
 - **Extensible architecture**: Easy to add custom steps
 - **Development mode**: Automatically uses system Chrome when running from source (no slow downloads)
 - **Rich step library**: Navigate, click, fill, type, screenshot, scroll, and more
@@ -126,11 +127,79 @@ steps:
 
 ### Variable Substitution
 
-Variables use `${var}` syntax with three-level priority:
+Variables use two syntax options:
+
+**Recommended: `{{ }}` syntax** (doesn't conflict with JS/Shell)
+```yaml
+variables:
+  api_token: "abc123"
+
+steps:
+  - type: evaluate
+    script: "const token = '{{api_token}}'; fetch(`/api?token=${token}`)"
+    # {{api_token}} is replaced, ${token} is preserved as JS template string
+```
+
+**Legacy: `${ }` syntax** (backward compatible, but avoid in scripts)
+```yaml
+variables:
+  base_url: "https://example.com"
+
+steps:
+  - type: navigate
+    url: "${base_url}/login"
+```
+
+**Important**: If a string contains `{{ }}`, only `{{ }}` will be processed. This prevents conflicts with JavaScript template strings, shell variables, etc.
+
+Variable priority (three levels):
 
 1. CLI arguments (`--var`)
 2. Step-level variables
 3. Flow-level variables
+
+## Error Handling
+
+When a step fails, Pomelo PW automatically collects rich error context:
+
+- **Error screenshot**: `./flow/error-step-N.png`
+- **HTML snapshot**: `./flow/error-step-N.html`
+- **Console errors**: Browser console messages (errors and warnings)
+- **Network errors**: Failed HTTP requests (4xx, 5xx)
+- **Current URL**: Page URL at the time of failure
+- **Visible text**: First 500 characters of page text
+
+**Example error output**:
+```
+[3/5] click FAILED: Element not found: .submit-btn
+  Screenshot saved: ./my-flow/error-step-3.png
+  HTML snapshot saved: ./my-flow/error-step-3.html
+  Console errors: 2
+  Network errors: 1
+  Current URL: https://example.com/login
+```
+
+**JSON output** includes full error context:
+```json
+{
+  "success": false,
+  "failed_step": {
+    "index": 2,
+    "type": "click",
+    "error": "Element not found: .submit-btn",
+    "context": {
+      "url": "https://example.com/login",
+      "screenshot": "./my-flow/error-step-3.png",
+      "html_snapshot": "./my-flow/error-step-3.html",
+      "console_errors": ["[ERROR] Failed to load resource"],
+      "network_errors": [{"url": "/api/user", "status": 500}],
+      "visible_text": "Login failed. Please try again.",
+      "step_index": 2,
+      "step_type": "click"
+    }
+  }
+}
+```
 
 ## Development
 

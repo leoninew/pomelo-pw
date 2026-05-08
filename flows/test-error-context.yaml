@@ -1,0 +1,19 @@
+name: test-error-context
+description: Test error context collection (intentionally fails)
+
+variables:
+  base_url: "https://example.com"
+
+steps:
+  - type: navigate
+    url: "{{base_url}}"
+
+  - type: screenshot
+    file: "01-before-error.png"
+
+  # This will fail - selector doesn't exist
+  - type: click
+    selector: ".non-existent-button"
+
+  - type: screenshot
+    file: "02-never-reached.png"

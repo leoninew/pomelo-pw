@@ -109,3 +109,52 @@ class TestSubstituteVars:
         result = substitute_vars(params, variables)
 
         assert result == {"url": "https://example.com/static"}
+
+    def test_double_brace_syntax(self) -> None:
+        """Test double brace {{ }} syntax."""
+        params = {"url": "{{base_url}}/login"}
+        variables = {"base_url": "https://example.com"}
+
+        result = substitute_vars(params, variables)
+
+        assert result == {"url": "https://example.com/login"}
+
+    def test_double_brace_with_js_template(self) -> None:
+        """Test double brace doesn't conflict with JS template strings."""
+        params = {"script": "const token = '{{api_token}}'; fetch(`/api?token=${token}`)"}
+        variables = {"api_token": "abc123"}
+
+        result = substitute_vars(params, variables)
+
+        assert result == {"script": "const token = 'abc123'; fetch(`/api?token=${token}`)"}
+
+    def test_single_brace_backward_compat(self) -> None:
+        """Test ${ } syntax still works when {{ }} is not used."""
+        params = {"url": "${base_url}/login"}
+        variables = {"base_url": "https://example.com"}
+
+        result = substitute_vars(params, variables)
+
+        assert result == {"url": "https://example.com/login"}
+
+    def test_double_brace_nested_variable(self) -> None:
+        """Test nested variable reference with double brace syntax."""
+        params = {"url": "{{login_url}}"}
+        variables = {
+            "base_url": "https://example.com",
+            "login_url": "{{base_url}}/login",
+        }
+
+        result = substitute_vars(params, variables)
+
+        assert result == {"url": "https://example.com/login"}
+
+    def test_double_brace_undefined_variable(self) -> None:
+        """Test undefined variable with double brace syntax raises error."""
+        params = {"url": "{{undefined_var}}"}
+        variables = {"base_url": "https://example.com"}
+
+        with pytest.raises(UndefinedVariableError) as exc_info:
+            substitute_vars(params, variables)
+
+        assert exc_info.value.var_name == "undefined_var"
