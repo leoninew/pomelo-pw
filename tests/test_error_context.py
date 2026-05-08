@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, call
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -132,9 +131,7 @@ class TestErrorContextCollector:
         page.content = AsyncMock(return_value="<html><body>Error</body></html>")
         page.evaluate = AsyncMock(return_value="Error page text")
 
-        ctx = await collector.collect_error_context(
-            page=page, output_dir=tmp_path, step_index=2, step_type="click"
-        )
+        ctx = await collector.collect_error_context(page=page, output_dir=tmp_path, step_index=2, step_type="click")
 
         assert ctx.url == "https://example.com/fail"
         assert ctx.step_index == 2
@@ -149,9 +146,7 @@ class TestErrorContextCollector:
         page.content = AsyncMock(return_value="<html></html>")
         page.evaluate = AsyncMock(return_value="text")
 
-        ctx = await collector.collect_error_context(
-            page=page, output_dir=tmp_path, step_index=0, step_type="navigate"
-        )
+        ctx = await collector.collect_error_context(page=page, output_dir=tmp_path, step_index=0, step_type="navigate")
 
         page.screenshot.assert_called_once()
         assert ctx.screenshot_path is not None
@@ -166,9 +161,7 @@ class TestErrorContextCollector:
         page.content = AsyncMock(return_value="<html><body>content</body></html>")
         page.evaluate = AsyncMock(return_value="content")
 
-        ctx = await collector.collect_error_context(
-            page=page, output_dir=tmp_path, step_index=0, step_type="click"
-        )
+        ctx = await collector.collect_error_context(page=page, output_dir=tmp_path, step_index=0, step_type="click")
 
         assert ctx.html_snapshot_path is not None
         html_file = Path(ctx.html_snapshot_path)
@@ -184,9 +177,7 @@ class TestErrorContextCollector:
         page.content = AsyncMock(return_value="<html></html>")
         page.evaluate = AsyncMock(return_value="x" * 1000)
 
-        ctx = await collector.collect_error_context(
-            page=page, output_dir=tmp_path, step_index=0, step_type="click"
-        )
+        ctx = await collector.collect_error_context(page=page, output_dir=tmp_path, step_index=0, step_type="click")
 
         assert ctx.visible_text is not None
         assert len(ctx.visible_text) == 500
@@ -206,9 +197,7 @@ class TestErrorContextCollector:
         page.content = AsyncMock(return_value="<html></html>")
         page.evaluate = AsyncMock(return_value="")
 
-        ctx = await collector.collect_error_context(
-            page=page, output_dir=tmp_path, step_index=0, step_type="click"
-        )
+        ctx = await collector.collect_error_context(page=page, output_dir=tmp_path, step_index=0, step_type="click")
 
         assert "[ERROR] Prior error" in ctx.console_errors
 
@@ -222,8 +211,6 @@ class TestErrorContextCollector:
         page.content = AsyncMock(return_value="<html></html>")
         page.evaluate = AsyncMock(return_value="")
 
-        ctx = await collector.collect_error_context(
-            page=page, output_dir=tmp_path, step_index=0, step_type="click"
-        )
+        ctx = await collector.collect_error_context(page=page, output_dir=tmp_path, step_index=0, step_type="click")
 
         assert ctx.screenshot_path is None  # Failed gracefully

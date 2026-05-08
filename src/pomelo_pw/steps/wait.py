@@ -105,11 +105,15 @@ class WaitStep(BaseStep):
 
         return StepResult(
             success=False,
-            message="No wait condition specified. Use selector, url, url_contains, url_pattern, network_idle, animation_stable, route_stable, or delay",
+            message=(
+                "No wait condition specified. Use selector, url, url_contains,"
+                " url_pattern, network_idle, animation_stable, route_stable, or delay"
+            ),
         )
 
     async def _wait_for_url_contains(self, context: StepContext, substring: str, timeout: int) -> None:
         """Wait for URL to contain a substring."""
+
         async def check_url() -> bool:
             return substring in context.page.url
 

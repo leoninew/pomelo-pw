@@ -66,9 +66,7 @@ class TestExecuteSteps:
 
             ctx = _make_context()
             with pytest.raises(RuntimeError, match="element not found"):
-                await executor._execute_steps(
-                    [{"type": "click", "selector": ".btn"}], ctx, {}
-                )
+                await executor._execute_steps([{"type": "click", "selector": ".btn"}], ctx, {})
 
     @pytest.mark.asyncio
     async def test_raises_on_unknown_step_type(self) -> None:
@@ -77,9 +75,7 @@ class TestExecuteSteps:
         with patch("pomelo_pw.executor.get_step", return_value=None):
             ctx = _make_context()
             with pytest.raises(ValueError, match="Unknown step type"):
-                await executor._execute_steps(
-                    [{"type": "nonexistent"}], ctx, {}
-                )
+                await executor._execute_steps([{"type": "nonexistent"}], ctx, {})
 
     @pytest.mark.asyncio
     async def test_step_level_variables_merged(self) -> None:
@@ -96,11 +92,13 @@ class TestExecuteSteps:
             mock_get_step.return_value = mock_step_class
 
             ctx = _make_context()
-            steps = [{
-                "type": "navigate",
-                "url": "https://example.com",
-                "variables": {"step_var": "step_value"},
-            }]
+            steps = [
+                {
+                    "type": "navigate",
+                    "url": "https://example.com",
+                    "variables": {"step_var": "step_value"},
+                }
+            ]
             await executor._execute_steps(steps, ctx, {"global_var": "global_value"})
 
         assert received_vars[0]["global_var"] == "global_value"

@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from pomelo_pw.steps.loop import LoopStep
 from pomelo_pw.steps import get_step
+from pomelo_pw.steps.loop import LoopStep
 
 
 class TestLoopStepRegistration:
@@ -50,12 +50,15 @@ class TestLoopStepExecute:
         ctx = self._make_context()
         step = LoopStep()
         inner = [{"type": "scroll", "direction": "down", "distance": 100}]
-        result = await step.execute(ctx, {
-            "type": "loop",
-            "steps": inner,
-            "while": "element_visible: .load-more",
-            "max_iterations": 5,
-        })
+        result = await step.execute(
+            ctx,
+            {
+                "type": "loop",
+                "steps": inner,
+                "while": "element_visible: .load-more",
+                "max_iterations": 5,
+            },
+        )
         assert result.success is True
         assert result.data is not None
         assert result.data["type"] == "while"
@@ -66,12 +69,15 @@ class TestLoopStepExecute:
     async def test_both_times_and_while_fails(self) -> None:
         ctx = self._make_context()
         step = LoopStep()
-        result = await step.execute(ctx, {
-            "type": "loop",
-            "steps": [],
-            "times": 3,
-            "while": "element_exists: h1",
-        })
+        result = await step.execute(
+            ctx,
+            {
+                "type": "loop",
+                "steps": [],
+                "times": 3,
+                "while": "element_exists: h1",
+            },
+        )
         assert result.success is False
         assert "Cannot specify both" in result.message
 
@@ -87,11 +93,14 @@ class TestLoopStepExecute:
     async def test_default_max_iterations(self) -> None:
         ctx = self._make_context()
         step = LoopStep()
-        result = await step.execute(ctx, {
-            "type": "loop",
-            "steps": [],
-            "while": "element_exists: h1",
-        })
+        result = await step.execute(
+            ctx,
+            {
+                "type": "loop",
+                "steps": [],
+                "while": "element_exists: h1",
+            },
+        )
         assert result.success is True
         assert result.data is not None
         assert result.data["max_iterations"] == 100

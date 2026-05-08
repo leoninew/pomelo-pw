@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from pomelo_pw.steps.conditional import ConditionalStep
 from pomelo_pw.steps import get_step
+from pomelo_pw.steps.conditional import ConditionalStep
 
 
 class TestConditionalStepRegistration:
@@ -24,9 +24,7 @@ class TestConditionalStepRegistration:
         assert any("then" in e for e in errors)
 
     def test_valid_params(self) -> None:
-        errors = ConditionalStep.validate_params(
-            {"type": "if", "condition": "element_exists: h1", "then": []}
-        )
+        errors = ConditionalStep.validate_params({"type": "if", "condition": "element_exists: h1", "then": []})
         assert len(errors) == 0
 
 
@@ -36,7 +34,7 @@ class TestConditionalStepEvaluate:
     def _make_page(self, **kwargs: Any) -> MagicMock:
         page = MagicMock()
         page.url = kwargs.get("url", "https://example.com/path")
-        page.query_selector = AsyncMock(return_value=kwargs.get("element", None))
+        page.query_selector = AsyncMock(return_value=kwargs.get("element"))
         page.content = AsyncMock(return_value=kwargs.get("content", "<html><body>hello</body></html>"))
         page.evaluate = AsyncMock(return_value=kwargs.get("js_result", True))
         return page
@@ -163,11 +161,14 @@ class TestConditionalStepExecute:
         ctx = self._make_context()
         step = ConditionalStep()
         then_steps = [{"type": "screenshot", "file": "a.png"}]
-        result = await step.execute(ctx, {
-            "type": "if",
-            "condition": "url_contains: example.com",
-            "then": then_steps,
-        })
+        result = await step.execute(
+            ctx,
+            {
+                "type": "if",
+                "condition": "url_contains: example.com",
+                "then": then_steps,
+            },
+        )
         assert result.success is True
         assert result.data is not None
         assert result.data["branch"] == "then"
@@ -178,12 +179,15 @@ class TestConditionalStepExecute:
         ctx = self._make_context(url="https://other.com")
         step = ConditionalStep()
         else_steps = [{"type": "screenshot", "file": "b.png"}]
-        result = await step.execute(ctx, {
-            "type": "if",
-            "condition": "url_contains: example.com",
-            "then": [],
-            "else": else_steps,
-        })
+        result = await step.execute(
+            ctx,
+            {
+                "type": "if",
+                "condition": "url_contains: example.com",
+                "then": [],
+                "else": else_steps,
+            },
+        )
         assert result.success is True
         assert result.data is not None
         assert result.data["branch"] == "else"
@@ -193,11 +197,14 @@ class TestConditionalStepExecute:
     async def test_skip_when_false_no_else(self) -> None:
         ctx = self._make_context(url="https://other.com")
         step = ConditionalStep()
-        result = await step.execute(ctx, {
-            "type": "if",
-            "condition": "url_contains: example.com",
-            "then": [],
-        })
+        result = await step.execute(
+            ctx,
+            {
+                "type": "if",
+                "condition": "url_contains: example.com",
+                "then": [],
+            },
+        )
         assert result.success is True
         assert result.data is not None
         assert result.data["branch"] == "skip"
@@ -207,10 +214,13 @@ class TestConditionalStepExecute:
         ctx = self._make_context()
         ctx.page.query_selector = AsyncMock(side_effect=RuntimeError("page crashed"))
         step = ConditionalStep()
-        result = await step.execute(ctx, {
-            "type": "if",
-            "condition": "element_exists: h1",
-            "then": [],
-        })
+        result = await step.execute(
+            ctx,
+            {
+                "type": "if",
+                "condition": "element_exists: h1",
+                "then": [],
+            },
+        )
         assert result.success is False
         assert "Failed to evaluate condition" in result.message

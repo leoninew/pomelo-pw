@@ -23,19 +23,19 @@ class SaveStateStep(BaseStep):
     async def execute(self, context: StepContext, params: dict[str, Any]) -> StepResult:
         """Execute save-state step."""
         file_path_str = params["file"]
-        
+
         # Resolve file path relative to output directory
         if not file_path_str.startswith("/") and not file_path_str.startswith("\\"):
             file_path = context.output_dir / file_path_str
         else:
             file_path = Path(file_path_str)
-        
+
         # Ensure parent directory exists
         file_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # Save storage state
         storage_state = await context.page.context.storage_state(path=str(file_path))
-        
+
         return StepResult(
             success=True,
             message=f"Browser state saved to: {file_path}",

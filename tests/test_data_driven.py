@@ -63,9 +63,9 @@ class TestDataDrivenExpansion:
         executor = FlowExecutor()
         received_outputs: list[Path] = []
 
-        async def fake_run_once(browser: Any, flow: Any, flow_path: Any,
-                                steps: Any, global_vars: Any, output: Path,
-                                start_time: Any) -> dict[str, Any]:
+        async def fake_run_once(
+            browser: Any, flow: Any, flow_path: Any, steps: Any, global_vars: Any, output: Path, start_time: Any
+        ) -> dict[str, Any]:
             received_outputs.append(output)
             return _ok_result()
 
@@ -74,8 +74,10 @@ class TestDataDrivenExpansion:
             {"_label": "user-bob", "username": "bob"},
         ]
 
-        with patch.object(executor, "_launch_browser", new=AsyncMock(return_value=_make_browser())), \
-             patch.object(executor, "_run_once", side_effect=fake_run_once):
+        with (
+            patch.object(executor, "_launch_browser", new=AsyncMock(return_value=_make_browser())),
+            patch.object(executor, "_run_once", side_effect=fake_run_once),
+        ):
             await executor._run_data_driven(
                 flow={"name": "test"},
                 flow_path=Path("test.yaml"),
@@ -96,16 +98,18 @@ class TestDataDrivenExpansion:
         executor = FlowExecutor()
         received_outputs: list[Path] = []
 
-        async def fake_run_once(browser: Any, flow: Any, flow_path: Any,
-                                steps: Any, global_vars: Any, output: Path,
-                                start_time: Any) -> dict[str, Any]:
+        async def fake_run_once(
+            browser: Any, flow: Any, flow_path: Any, steps: Any, global_vars: Any, output: Path, start_time: Any
+        ) -> dict[str, Any]:
             received_outputs.append(output)
             return _ok_result()
 
         data_rows = [{"username": "alice"}, {"username": "bob"}]
 
-        with patch.object(executor, "_launch_browser", new=AsyncMock(return_value=_make_browser())), \
-             patch.object(executor, "_run_once", side_effect=fake_run_once):
+        with (
+            patch.object(executor, "_launch_browser", new=AsyncMock(return_value=_make_browser())),
+            patch.object(executor, "_run_once", side_effect=fake_run_once),
+        ):
             await executor._run_data_driven(
                 flow={"name": "test"},
                 flow_path=Path("test.yaml"),
@@ -126,17 +130,25 @@ class TestDataDrivenExpansion:
         executor = FlowExecutor()
         received_vars: list[dict[str, Any]] = []
 
-        async def fake_run_once(browser: Any, flow: Any, flow_path: Any,
-                                steps: Any, global_vars: dict[str, Any],
-                                output: Any, start_time: Any) -> dict[str, Any]:
+        async def fake_run_once(
+            browser: Any,
+            flow: Any,
+            flow_path: Any,
+            steps: Any,
+            global_vars: dict[str, Any],
+            output: Any,
+            start_time: Any,
+        ) -> dict[str, Any]:
             received_vars.append(dict(global_vars))
             return _ok_result()
 
         data_rows = [{"username": "alice", "env": "staging"}]
         base_vars = {"env": "prod", "base_url": "https://example.com"}
 
-        with patch.object(executor, "_launch_browser", new=AsyncMock(return_value=_make_browser())), \
-             patch.object(executor, "_run_once", side_effect=fake_run_once):
+        with (
+            patch.object(executor, "_launch_browser", new=AsyncMock(return_value=_make_browser())),
+            patch.object(executor, "_run_once", side_effect=fake_run_once),
+        ):
             await executor._run_data_driven(
                 flow={"name": "test"},
                 flow_path=Path("test.yaml"),
@@ -157,17 +169,19 @@ class TestDataDrivenExpansion:
         executor = FlowExecutor()
         call_idx = 0
 
-        async def fake_run_once(browser: Any, flow: Any, flow_path: Any,
-                                steps: Any, global_vars: Any, output: Any,
-                                start_time: Any) -> dict[str, Any]:
+        async def fake_run_once(
+            browser: Any, flow: Any, flow_path: Any, steps: Any, global_vars: Any, output: Any, start_time: Any
+        ) -> dict[str, Any]:
             nonlocal call_idx
             call_idx += 1
             return _ok_result(screenshots=[f"shot-{call_idx}.png"])
 
         data_rows = [{"username": "alice"}, {"username": "bob"}, {"username": "carol"}]
 
-        with patch.object(executor, "_launch_browser", new=AsyncMock(return_value=_make_browser())), \
-             patch.object(executor, "_run_once", side_effect=fake_run_once):
+        with (
+            patch.object(executor, "_launch_browser", new=AsyncMock(return_value=_make_browser())),
+            patch.object(executor, "_run_once", side_effect=fake_run_once),
+        ):
             result = await executor._run_data_driven(
                 flow={"name": "test"},
                 flow_path=Path("test.yaml"),
@@ -192,17 +206,19 @@ class TestDataDrivenExpansion:
         executor = FlowExecutor()
         call_count = 0
 
-        async def fake_run_once(browser: Any, flow: Any, flow_path: Any,
-                                steps: Any, global_vars: Any, output: Any,
-                                start_time: Any) -> dict[str, Any]:
+        async def fake_run_once(
+            browser: Any, flow: Any, flow_path: Any, steps: Any, global_vars: Any, output: Any, start_time: Any
+        ) -> dict[str, Any]:
             nonlocal call_count
             call_count += 1
             return _ok_result() if call_count != 2 else _fail_result()
 
         data_rows = [{"username": "alice"}, {"username": "bob"}, {"username": "carol"}]
 
-        with patch.object(executor, "_launch_browser", new=AsyncMock(return_value=_make_browser())), \
-             patch.object(executor, "_run_once", side_effect=fake_run_once):
+        with (
+            patch.object(executor, "_launch_browser", new=AsyncMock(return_value=_make_browser())),
+            patch.object(executor, "_run_once", side_effect=fake_run_once),
+        ):
             result = await executor._run_data_driven(
                 flow={"name": "test", "on_error": "stop"},
                 flow_path=Path("test.yaml"),
@@ -223,17 +239,19 @@ class TestDataDrivenExpansion:
         executor = FlowExecutor()
         call_count = 0
 
-        async def fake_run_once(browser: Any, flow: Any, flow_path: Any,
-                                steps: Any, global_vars: Any, output: Any,
-                                start_time: Any) -> dict[str, Any]:
+        async def fake_run_once(
+            browser: Any, flow: Any, flow_path: Any, steps: Any, global_vars: Any, output: Any, start_time: Any
+        ) -> dict[str, Any]:
             nonlocal call_count
             call_count += 1
             return _ok_result() if call_count != 2 else _fail_result()
 
         data_rows = [{"username": "alice"}, {"username": "bob"}, {"username": "carol"}]
 
-        with patch.object(executor, "_launch_browser", new=AsyncMock(return_value=_make_browser())), \
-             patch.object(executor, "_run_once", side_effect=fake_run_once):
+        with (
+            patch.object(executor, "_launch_browser", new=AsyncMock(return_value=_make_browser())),
+            patch.object(executor, "_run_once", side_effect=fake_run_once),
+        ):
             result = await executor._run_data_driven(
                 flow={"name": "test", "on_error": "continue"},
                 flow_path=Path("test.yaml"),

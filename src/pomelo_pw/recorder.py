@@ -237,7 +237,7 @@ class FlowRecorder:
     async def wait_for_recording(self) -> None:
         """Wait for user to finish recording."""
         click.echo("\nRecording... Press Ctrl+C when done.\n")
-        
+
         try:
             while True:
                 await asyncio.sleep(1)
@@ -271,17 +271,17 @@ class FlowRecorder:
     def save_flow(self, flow: dict[str, Any], output_path: Path) -> None:
         """Save flow to YAML file."""
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         with open(output_path, "w", encoding="utf-8") as f:
             yaml.dump(flow, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-        
+
         click.echo(f"\n✓ Flow saved to: {output_path}")
 
 
 async def record_flow(url: str, output: str, headless: bool = False) -> None:
     """Launch interactive flow recorder."""
     flow_name = Path(output).stem
-    
+
     click.echo(f"⏺ Recording flow: {flow_name}")
     click.echo(f"   Starting at: {url}")
     click.echo("━" * 60)
@@ -299,7 +299,7 @@ async def record_flow(url: str, output: str, headless: bool = False) -> None:
 
         try:
             await page.goto(url, wait_until="domcontentloaded")
-            
+
             recorder = FlowRecorder(page, flow_name)
             await recorder.inject_recorder_ui()
 
@@ -310,7 +310,7 @@ async def record_flow(url: str, output: str, headless: bool = False) -> None:
 
             # Get recorded steps
             steps = await recorder.get_recorded_steps()
-            
+
             if not steps:
                 click.echo("\n⚠ No steps recorded")
                 return

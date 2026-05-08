@@ -44,8 +44,6 @@ class LoopStep(BaseStep):
                 message="Must specify either 'times' or 'while' parameter",
             )
 
-        iterations = 0
-
         if times is not None:
             # Fixed iteration count
             click.echo(f"Loop: executing {times} times")

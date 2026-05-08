@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import subprocess
 import sys
@@ -23,7 +24,12 @@ def cli() -> None:
 @cli.command()
 @click.argument("flow", type=click.Path(exists=True))
 @click.option("--base-url", help="Override base URL variable")
-@click.option("--output", "-o", type=click.Path(), help="Output directory (default: ./<flow-name>, e.g., 'my-flow.yaml' → './my-flow/')")
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    help="Output directory (default: ./<flow-name>, e.g., 'my-flow.yaml' → './my-flow/')",
+)
 @click.option("--headless", is_flag=True, help="Run in headless mode (default: visible browser)")
 @click.option("--var", multiple=True, help="Override variable (format: key=value)")
 @click.option("--verbose", "-v", is_flag=True, help="Show step-by-step progress")
@@ -171,16 +177,14 @@ def spec(step_type: str) -> None:
 @click.option("--headless", is_flag=True, help="Run in headless mode")
 def explore(url: str, headless: bool) -> None:
     """Launch interactive page explorer to discover selectors.
-    
+
     Hover over elements to see available selectors.
     Click an element to display its selectors in the terminal.
     """
     from pomelo_pw.explorer import explore_page
-    
-    try:
+
+    with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(explore_page(url, headless=headless))
-    except KeyboardInterrupt:
-        pass
 
 
 @cli.command()
@@ -189,18 +193,16 @@ def explore(url: str, headless: bool) -> None:
 @click.option("--headless", is_flag=True, help="Run in headless mode")
 def record(url: str, output: str, headless: bool) -> None:
     """Record user interactions and generate a YAML flow.
-    
+
     Click elements to record click actions.
     Type in inputs to record fill actions.
     Press Enter to record key press.
     Press Ctrl+C to stop and save the flow.
     """
     from pomelo_pw.recorder import record_flow
-    
-    try:
+
+    with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(record_flow(url, output, headless=headless))
-    except KeyboardInterrupt:
-        pass
 
 
 if __name__ == "__main__":

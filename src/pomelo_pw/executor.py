@@ -40,7 +40,7 @@ class FlowExecutor:
         total_steps: int,
     ) -> StepResult:
         """Execute step with retry support.
-        
+
         Retry parameters:
         - retry: number of retry attempts (default: 0, no retry)
         - retry_delay: delay between retries in milliseconds (default: 1000)
@@ -49,17 +49,17 @@ class FlowExecutor:
         max_retries = params.get("retry", 0)
         retry_delay = params.get("retry_delay", 1000)
         retry_on = params.get("retry_on", [])  # Empty list means retry on all errors
-        
+
         last_error: Exception | None = None
-        
+
         for attempt in range(max_retries + 1):
             try:
                 result = await step_instance.execute(step_context, params)
-                
+
                 if result.success:
                     if attempt > 0:
                         self._log(f"[{step_num}/{total_steps}] Succeeded on attempt {attempt + 1}")
-                    
+
                     # Handle conditional and loop steps
                     if result.data:
                         # Conditional step
@@ -73,7 +73,7 @@ class FlowExecutor:
                                     global_vars=step_context.variables,
                                     prefix=f"{step_num}.",
                                 )
-                        
+
                         # Loop step
                         elif "type" in result.data and result.data["type"] in ("times", "while"):
                             await self._execute_loop(
@@ -82,38 +82,36 @@ class FlowExecutor:
                                 global_vars=step_context.variables,
                                 prefix=f"{step_num}.",
                             )
-                    
+
                     return result
-                
+
                 # Step returned failure
                 if attempt < max_retries:
                     self._log(f"[{step_num}/{total_steps}] Attempt {attempt + 1} failed: {result.message}, retrying...")
                     await asyncio.sleep(retry_delay / 1000)
                     continue
-                
+
                 return result
-                
+
             except Exception as e:
                 last_error = e
                 error_type = type(e).__name__.lower()
-                
+
                 # Check if we should retry this error type
-                should_retry = not retry_on or any(
-                    err_type.lower() in error_type for err_type in retry_on
-                )
-                
+                should_retry = not retry_on or any(err_type.lower() in error_type for err_type in retry_on)
+
                 if attempt < max_retries and should_retry:
                     self._log(f"[{step_num}/{total_steps}] Attempt {attempt + 1} failed: {e}, retrying...")
                     await asyncio.sleep(retry_delay / 1000)
                     continue
-                
+
                 # No more retries or error type not in retry_on list
                 raise
-        
+
         # Should not reach here, but just in case
         if last_error:
             raise last_error
-        
+
         return StepResult(success=False, message="Unknown error in retry logic")
 
     async def _execute_steps(
@@ -127,22 +125,22 @@ class FlowExecutor:
         for idx, step in enumerate(steps):
             step_type = step.get("type", "unknown")
             step_num = f"{prefix}{idx + 1}"
-            
+
             self._log(f"[{step_num}] {step_type} begin")
-            
+
             # Merge step-level variables
             step_vars = step.get("variables", {})
             merged_vars = {**global_vars, **step_vars}
-            
+
             # Substitute variables in params
             params = substitute_vars(step, merged_vars)
-            
+
             step_class = get_step(params["type"])
             if step_class is None:
                 raise ValueError(f"Unknown step type: {params['type']}")
-            
+
             step_instance = step_class()
-            
+
             # Update context with merged variables
             nested_context = StepContext(
                 page=context.page,
@@ -150,7 +148,7 @@ class FlowExecutor:
                 output_dir=context.output_dir,
                 screenshots=context.screenshots,
             )
-            
+
             # Execute step
             result = await self._execute_with_retry(
                 step_instance=step_instance,
@@ -159,10 +157,10 @@ class FlowExecutor:
                 step_num=step_num,
                 total_steps=len(steps),
             )
-            
+
             if not result.success:
                 raise RuntimeError(result.message)
-            
+
             self._log(f"[{step_num}] {result.message} end")
 
     async def _execute_loop(
@@ -175,7 +173,7 @@ class FlowExecutor:
         """Execute loop iterations."""
         loop_type = loop_data["type"]
         steps = loop_data["steps"]
-        
+
         if loop_type == "times":
             iterations = loop_data["iterations"]
             for i in range(iterations):
@@ -186,38 +184,37 @@ class FlowExecutor:
                     global_vars=global_vars,
                     prefix=f"{prefix}iter-{i + 1}.",
                 )
-        
+
         elif loop_type == "while":
             condition = loop_data["condition"]
             max_iterations = loop_data["max_iterations"]
-            
+
             # Import conditional step to reuse condition evaluation
             from pomelo_pw.steps.conditional import ConditionalStep
-            
+
             conditional = ConditionalStep()
             iteration = 0
-            
+
             while iteration < max_iterations:
                 # Evaluate condition
                 result = await conditional._evaluate_condition(context.page, condition)
-                
+
                 if not result:
                     self._log(f"[{prefix}while] Condition '{condition}' is false, exiting loop")
                     break
-                
+
                 iteration += 1
                 self._log(f"[{prefix}iter-{iteration}] Loop iteration {iteration} (while '{condition}')")
-                
+
                 await self._execute_steps(
                     steps=steps,
                     context=context,
                     global_vars=global_vars,
                     prefix=f"{prefix}iter-{iteration}.",
                 )
-            
+
             if iteration >= max_iterations:
                 self._log(f"[{prefix}while] Reached max iterations ({max_iterations}), exiting loop")
-
 
     def load_flow(self, flow_path: Path) -> dict[str, Any]:
         """Load flow file."""

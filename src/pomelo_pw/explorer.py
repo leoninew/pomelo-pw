@@ -1,9 +1,6 @@
 """Interactive page explorer for discovering selectors."""
 
 import asyncio
-import json
-from pathlib import Path
-from typing import Any
 
 import click
 from playwright.async_api import Page, async_playwright
@@ -215,9 +212,10 @@ class PageExplorer:
                             const label = key.replace('_', '-').toUpperCase();
                             const value = selectors[key];
                             const truncated = value.length > 60 ? value.substring(0, 57) + '...' : value;
+                            const escaped = this.escapeHtml(truncated);
                             lines.push(`<div style="margin: 5px 0;">
                                 <span style="color: #FFC107;">${label}:</span><br/>
-                                <span style="color: #E0E0E0; word-break: break-all;">${this.escapeHtml(truncated)}</span>
+                                <span style="color: #E0E0E0; word-break: break-all;">${escaped}</span>
                             </div>`);
                         }
                     }
@@ -271,7 +269,7 @@ async def explore_page(url: str, headless: bool = False) -> None:
 
         try:
             await page.goto(url, wait_until="domcontentloaded")
-            
+
             explorer = PageExplorer(page)
             await explorer.inject_explorer_ui()
 
@@ -280,11 +278,11 @@ async def explore_page(url: str, headless: bool = False) -> None:
             # Keep the browser open and wait for selections
             while True:
                 selectors = await explorer.wait_for_selection()
-                
+
                 click.echo("\n" + "=" * 60)
                 click.echo("Selected Element Selectors:")
                 click.echo("=" * 60)
-                
+
                 # Display in priority order
                 priority = ["data_test", "id", "role", "text", "class", "css", "xpath"]
                 for key in priority:
@@ -292,7 +290,7 @@ async def explore_page(url: str, headless: bool = False) -> None:
                         label = key.replace("_", "-").upper()
                         value = selectors[key]
                         click.echo(f"{label:12} {value}")
-                
+
                 click.echo("=" * 60 + "\n")
 
         except KeyboardInterrupt:

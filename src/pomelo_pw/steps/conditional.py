@@ -64,7 +64,7 @@ class ConditionalStep(BaseStep):
 
     async def _evaluate_condition(self, page: Page, condition: str) -> bool:
         """Evaluate condition expression.
-        
+
         Supports:
         - element_exists: selector
         - element_visible: selector
@@ -101,6 +101,7 @@ class ConditionalStep(BaseStep):
 
             elif cond_type == "url_matches":
                 import re
+
                 return bool(re.search(cond_value, page.url))
 
             elif cond_type == "text_contains":
