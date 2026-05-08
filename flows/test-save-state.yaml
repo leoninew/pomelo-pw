@@ -1,0 +1,41 @@
+name: test-save-state
+description: Login and save authentication state
+
+variables:
+  base_url: "https://example.com"
+  username: "testuser"
+  password: "testpass"
+
+steps:
+  - type: navigate
+    url: "{{base_url}}/login"
+
+  - type: screenshot
+    file: "01-login-page.png"
+
+  # Simulate login (adjust selectors for real site)
+  - type: fill
+    selector: "input[name='username']"
+    value: "{{username}}"
+
+  - type: fill
+    selector: "input[name='password']"
+    value: "{{password}}"
+
+  - type: click
+    selector: "button[type='submit']"
+
+  # Wait for login to complete
+  - type: wait
+    url_contains: "/dashboard"
+    timeout: 10000
+
+  - type: screenshot
+    file: "02-logged-in.png"
+
+  # Save authentication state
+  - type: save-state
+    file: "auth-state.json"
+
+  - type: screenshot
+    file: "03-state-saved.png"

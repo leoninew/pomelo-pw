@@ -8,8 +8,8 @@ help:
 	@echo "Available targets:"
 	@echo "  install      - Install dependencies and Playwright browsers"
 	@echo "  test         - Run tests"
-	@echo "  lint         - Run ruff and mypy checks"
-	@echo "  check        - Run all checks (lint + test)"
+	@echo "  lint         - Run ruff check --fix and ruff format"
+	@echo "  check        - Run all checks (lint + mypy)"
 	@echo "  build        - Build wheel package"
 	@echo "  skill        - Install skill to Claude Code"
 	@echo "  clean        - Clean build artifacts"
@@ -21,6 +21,10 @@ install:
 
 test:
 	uv run pytest tests/ -v
+
+lint:
+	uv run ruff check --fix .
+	uv run ruff format .
 
 check:
 	uv run ruff format src/ tests/

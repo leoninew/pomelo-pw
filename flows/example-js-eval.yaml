@@ -1,0 +1,24 @@
+name: example-js-eval
+description: Demonstrate {{ }} syntax that doesn't conflict with JS template strings
+
+variables:
+  base_url: "https://example.com"
+  api_token: "secret-token-123"
+
+steps:
+  - type: navigate
+    url: "{{base_url}}"
+
+  - type: screenshot
+    file: "01-homepage.png"
+
+  # Using {{ }} syntax allows JS template strings to work correctly
+  - type: evaluate
+    script: |
+      const token = '{{api_token}}';
+      const url = `${window.location.origin}/api/data`;
+      console.log(`Fetching from ${url} with token ${token}`);
+      return {token, url};
+
+  - type: screenshot
+    file: "02-after-eval.png"

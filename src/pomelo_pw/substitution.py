@@ -11,7 +11,7 @@ class UndefinedVariableError(Exception):
 
     def __init__(self, var_name: str) -> None:
         self.var_name = var_name
-        super().__init__(f"Variable '${var_name}' is not defined")
+        super().__init__(f"Variable '{var_name}' is not defined")
 
 
 class CircularReferenceError(Exception):
@@ -24,34 +24,66 @@ class CircularReferenceError(Exception):
 
 
 def _substitute_string(value: str, variables: dict[str, Any], visited: set[str]) -> str:
-    """替换单个字符串中的变量."""
-    pattern = r"\$\{(\w+)\}"
+    """替换单个字符串中的变量.
 
-    def replace(match: re.Match[str]) -> str:
-        var_name = match.group(1)
+    支持两种语法:
+    - {{ var }} - 推荐语法，不会与 JS/Shell 等语言冲突
+    - ${ var } - 向后兼容语法（仅在字符串中不包含 {{ }} 时启用）
 
-        if var_name in visited:
-            raise CircularReferenceError(var_name, list(visited))
+    策略: 如果字符串包含 {{ }}，则只处理 {{ }}，忽略 ${ }
+    """
+    # 检查是否使用了双花括号语法
+    has_double_brace = "{{" in value and "}}" in value
 
-        if var_name not in variables:
-            raise UndefinedVariableError(var_name)
+    # 处理双花括号语法 {{ var }}
+    double_brace_pattern = r"\{\{(\w+)\}\}"
 
-        var_value = variables[var_name]
+    def replace_double_brace(match: re.Match[str]) -> str:
+        var_name = match.group(1).strip()
+        return _resolve_variable(var_name, variables, visited)
 
-        if isinstance(var_value, str) and "${" in var_value:
-            new_visited = visited | {var_name}
-            return _substitute_string(var_value, variables, new_visited)
+    value = re.sub(double_brace_pattern, replace_double_brace, value)
 
-        return str(var_value)
+    # 仅在未使用双花括号时处理单花括号语法（向后兼容）
+    if not has_double_brace:
+        single_brace_pattern = r"\$\{(\w+)\}"
 
-    return re.sub(pattern, replace, value)
+        def replace_single_brace(match: re.Match[str]) -> str:
+            var_name = match.group(1)
+            return _resolve_variable(var_name, variables, visited)
+
+        value = re.sub(single_brace_pattern, replace_single_brace, value)
+
+    return value
+
+
+def _resolve_variable(var_name: str, variables: dict[str, Any], visited: set[str]) -> str:
+    """解析变量值，支持嵌套引用."""
+    if var_name in visited:
+        raise CircularReferenceError(var_name, list(visited))
+
+    if var_name not in variables:
+        raise UndefinedVariableError(var_name)
+
+    var_value = variables[var_name]
+
+    # 如果变量值本身包含变量引用，递归替换
+    if isinstance(var_value, str) and ("${" in var_value or "{{" in var_value):
+        new_visited = visited | {var_name}
+        return _substitute_string(var_value, variables, new_visited)
+
+    return str(var_value)
 
 
 def substitute_vars(params: dict[str, Any], variables: dict[str, Any]) -> dict[str, Any]:
     """替换参数中的所有变量引用.
 
+    支持两种语法:
+    - {{ var }} - 推荐语法，不会与 JS/Shell 等语言冲突
+    - ${ var } - 向后兼容语法
+
     Args:
-        params: 参数字典，可能包含 ${var} 形式的变量引用
+        params: 参数字典，可能包含 {{ var }} 或 ${ var } 形式的变量引用
         variables: 变量字典
 
     Returns:

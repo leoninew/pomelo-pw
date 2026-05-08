@@ -1,0 +1,32 @@
+name: test-data-driven
+description: Test data-driven execution with multiple users
+
+variables:
+  base_url: "https://example.com"
+
+data:
+  - _label: "user-alice"
+    username: "alice"
+    search_term: "playwright"
+  - _label: "user-bob"
+    username: "bob"
+    search_term: "automation"
+  - _label: "user-carol"
+    username: "carol"
+    search_term: "testing"
+
+steps:
+  - type: navigate
+    url: "{{base_url}}"
+
+  - type: screenshot
+    file: "homepage-{{username}}.png"
+
+  - type: if
+    condition: "element_exists: input[type=search]"
+    then:
+      - type: fill
+        selector: "input[type=search]"
+        value: "{{search_term}}"
+      - type: screenshot
+        file: "search-{{username}}.png"

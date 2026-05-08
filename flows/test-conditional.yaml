@@ -1,0 +1,40 @@
+name: test-conditional
+description: Test conditional execution
+
+variables:
+  base_url: "https://example.com"
+
+steps:
+  - type: navigate
+    url: "{{base_url}}"
+
+  # Test element_exists condition
+  - type: if
+    condition: "element_exists: h1"
+    then:
+      - type: screenshot
+        file: "h1-exists.png"
+    else:
+      - type: screenshot
+        file: "h1-not-found.png"
+
+  # Test element_visible condition
+  - type: if
+    condition: "element_visible: body"
+    then:
+      - type: screenshot
+        file: "body-visible.png"
+
+  # Test url_contains condition
+  - type: if
+    condition: "url_contains: example.com"
+    then:
+      - type: screenshot
+        file: "url-match.png"
+
+  # Test JavaScript expression
+  - type: if
+    condition: "document.title.length > 0"
+    then:
+      - type: screenshot
+        file: "has-title.png"

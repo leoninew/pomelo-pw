@@ -1,6 +1,6 @@
 [project]
 name = "pomelo-pw"
-version = "0.1.1"
+version = "0.3.1"
 description = "Flow-based UI automation tool powered by Playwright"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -8,6 +8,11 @@ dependencies = [
     "playwright>=1.40.0",
     "click>=8.0.0",
     "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+visual = [
+    "pillow>=10.0.0",
 ]
 
 [project.scripts]

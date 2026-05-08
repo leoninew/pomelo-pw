@@ -1,0 +1,34 @@
+name: test-loop
+description: Test loop execution
+
+variables:
+  base_url: "https://example.com"
+
+steps:
+  - type: navigate
+    url: "{{base_url}}"
+
+  # Test fixed iteration loop
+  - type: loop
+    times: 3
+    steps:
+      - type: scroll
+        direction: down
+        distance: 300
+      - type: wait
+        duration: 500
+
+  # Take screenshot after scrolling
+  - type: screenshot
+    file: "after-scroll-loop.png"
+
+  # Test while loop (scroll until bottom)
+  - type: loop
+    while: "element_visible: body"
+    max_iterations: 5
+    steps:
+      - type: scroll
+        direction: down
+        distance: 500
+      - type: wait
+        duration: 300
