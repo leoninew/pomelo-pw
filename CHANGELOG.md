@@ -5,6 +5,40 @@ All notable changes to Pomelo PW will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2025-01-XX
+
+### Added
+- **Enhanced SPA wait capabilities**: Multiple new wait conditions for modern web applications
+  - `url_contains`: Wait for URL to contain a substring
+  - `url_pattern`: Wait for URL to match a regex pattern
+  - `network_idle`: Wait for network to be idle
+  - `animation_stable`: Wait for CSS animations/transitions to complete
+  - `route_stable`: Wait for URL to remain stable for a duration
+  - `state` parameter for selector wait (visible, attached, detached, hidden)
+- **Step-level retry**: Automatic retry mechanism for any step
+  - `retry`: Number of retry attempts
+  - `retry_delay`: Delay between retries in milliseconds
+  - `retry_on`: List of error types to retry on (optional filter)
+  - Detailed retry logging in verbose mode
+
+### Changed
+- `wait` step now supports more flexible conditions for SPA applications
+- All steps can now use retry parameters for improved reliability
+
+### Examples
+```yaml
+# Enhanced wait
+- type: wait
+  url_contains: "/dashboard"
+  network_idle: true
+
+# Step retry
+- type: click
+  selector: ".button"
+  retry: 3
+  retry_delay: 1000
+```
+
 ## [0.2.0] - 2025-01-XX
 
 ### Added
@@ -39,5 +73,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Type-safe step validation
 - Development mode with system Chrome detection
 
+[0.3.0]: https://github.com/yourusername/pomelo-pw/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/yourusername/pomelo-pw/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/yourusername/pomelo-pw/releases/tag/v0.1.1

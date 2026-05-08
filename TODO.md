@@ -87,9 +87,10 @@ steps:
 
 ---
 
-## Phase 2: 短期实施 (1-2 周)
+## Phase 2: 短期实施 (1-2 周) ✅ COMPLETED
 
-### 3. 增强 SPA 等待能力
+### 3. 增强 SPA 等待能力 ✅ COMPLETED
+
 **新增 wait 参数**:
 ```yaml
 - type: wait
@@ -108,13 +109,27 @@ steps:
 - type: wait
   route_stable: true               # 路由稳定
   duration: 500                    # 稳定持续时间
+  
+- type: wait
+  selector: ".content"
+  state: "visible"                 # visible, attached, detached, hidden
 ```
+
+**已完成**:
+- ✅ 实现 URL 包含匹配 (`url_contains`)
+- ✅ 实现 URL 正则匹配 (`url_pattern`)
+- ✅ 实现网络空闲等待 (`network_idle`)
+- ✅ 实现动画稳定检测 (`animation_stable`)
+- ✅ 实现路由稳定检测 (`route_stable`)
+- ✅ 支持 selector state 参数
+- ✅ 创建测试 flow（flows/test-wait-enhanced.yaml）
 
 **文件**: `src/pomelo_pw/steps/wait.py`
 
 ---
 
-### 4. Step 级 Retry
+### 4. Step 级 Retry ✅ COMPLETED
+
 **功能**:
 ```yaml
 steps:
@@ -131,7 +146,27 @@ steps:
       - "element_not_found"
 ```
 
-**文件**: `src/pomelo_pw/steps/base.py`, `src/pomelo_pw/executor.py`
+**已完成**:
+- ✅ 实现 `_execute_with_retry` 方法
+- ✅ 支持 `retry` 参数（重试次数）
+- ✅ 支持 `retry_delay` 参数（重试延迟）
+- ✅ 支持 `retry_on` 参数（错误类型过滤）
+- ✅ 详细的重试日志输出
+- ✅ 创建测试 flow（flows/test-retry.yaml）
+
+**文件**: `src/pomelo_pw/executor.py`
+
+---
+
+## Phase 2 总结 ✅
+
+**v0.3.0 已完成**:
+1. ✅ 增强 SPA 等待能力 - URL 模式、网络空闲、动画稳定、路由稳定
+2. ✅ Step 级 Retry - 自动重试，支持延迟和错误类型过滤
+
+**测试状态**: 51/51 通过
+**类型检查**: 通过 mypy strict mode
+**文档**: 已更新 README.md
 
 ---
 

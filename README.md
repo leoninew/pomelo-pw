@@ -8,6 +8,8 @@ Flow-based UI automation tool powered by Playwright. Define your browser automat
 - **Type-safe steps**: Built-in validation for all step parameters
 - **Variable substitution**: Support for `{{ var }}` and `${ var }` syntax with multi-level priority
 - **Rich error context**: Automatic screenshot, HTML snapshot, console/network errors on failure
+- **Enhanced SPA support**: URL pattern matching, network idle, animation stable, route stable waits
+- **Step-level retry**: Automatic retry with configurable delay and error type filtering
 - **Extensible architecture**: Easy to add custom steps
 - **Development mode**: Automatically uses system Chrome when running from source (no slow downloads)
 - **Rich step library**: Navigate, click, fill, type, screenshot, scroll, and more
@@ -96,6 +98,75 @@ pomelo-pw spec navigate
 | `screenshot` | `file` | Take a screenshot |
 | `click` | `selector` | Click an element |
 | `fill` | `selector`, `value` | Fill a form field |
+| `type` | `selector`, `value` | Type text character by character |
+| `press` | `key` | Press a keyboard key |
+| `wait` | - | Wait for conditions (selector, URL, network idle, animations, etc.) |
+| `scroll` | - | Scroll the page |
+| `hover` | `selector` | Hover over an element |
+| `select` | `selector`, `value` | Select dropdown option |
+| `check` | `selector` | Check a checkbox |
+| `uncheck` | `selector` | Uncheck a checkbox |
+| `evaluate` | `script` | Execute JavaScript |
+| `set-viewport` | - | Set viewport size |
+
+Run `pomelo-pw spec <step>` for detailed parameter information.
+
+### Enhanced Wait Step
+
+The `wait` step supports multiple conditions for SPA applications:
+
+```yaml
+# Wait for selector with state
+- type: wait
+  selector: ".content"
+  state: "visible"  # visible, attached, detached, hidden
+
+# Wait for URL to contain substring
+- type: wait
+  url_contains: "/dashboard"
+
+# Wait for URL pattern (regex)
+- type: wait
+  url_pattern: "^/user/\\d+$"
+
+# Wait for network idle
+- type: wait
+  network_idle: true
+
+# Wait for animations to stabilize
+- type: wait
+  animation_stable: true
+
+# Wait for route to stabilize (URL doesn't change)
+- type: wait
+  route_stable: true
+  route_stable_duration: 500  # ms
+
+# Fixed delay
+- type: wait
+  delay: 2000  # ms
+```
+
+### Step-Level Retry
+
+Any step can be retried automatically on failure:
+
+```yaml
+# Retry 3 times with 1 second delay
+- type: click
+  selector: ".flaky-button"
+  retry: 3
+  retry_delay: 1000
+
+# Retry only on specific error types
+- type: fill
+  selector: "input"
+  value: "test"
+  retry: 2
+  retry_on:
+    - "timeout"
+    - "element_not_found"
+```
 | `type` | `selector`, `value` | Type text character by character |
 | `press` | `key` | Press a keyboard key |
 | `wait` | - | Wait for conditions (selector, url, timeout) |

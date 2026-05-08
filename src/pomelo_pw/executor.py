@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from pathlib import Path
 from typing import Any
@@ -13,7 +14,7 @@ from playwright.async_api import async_playwright
 from pomelo_pw.config import load_app_config
 from pomelo_pw.error_context import ErrorContextCollector
 from pomelo_pw.steps import get_step
-from pomelo_pw.steps.base import StepContext
+from pomelo_pw.steps.base import BaseStep, StepContext, StepResult
 from pomelo_pw.substitution import substitute_vars
 
 
@@ -29,6 +30,67 @@ class FlowExecutor:
         """Output progress message."""
         if self.verbose:
             click.echo(msg)
+
+    async def _execute_with_retry(
+        self,
+        step_instance: BaseStep,
+        step_context: StepContext,
+        params: dict[str, Any],
+        step_num: str,
+        total_steps: int,
+    ) -> StepResult:
+        """Execute step with retry support.
+        
+        Retry parameters:
+        - retry: number of retry attempts (default: 0, no retry)
+        - retry_delay: delay between retries in milliseconds (default: 1000)
+        - retry_on: list of error types to retry on (default: all errors)
+        """
+        max_retries = params.get("retry", 0)
+        retry_delay = params.get("retry_delay", 1000)
+        retry_on = params.get("retry_on", [])  # Empty list means retry on all errors
+        
+        last_error: Exception | None = None
+        
+        for attempt in range(max_retries + 1):
+            try:
+                result = await step_instance.execute(step_context, params)
+                
+                if result.success:
+                    if attempt > 0:
+                        self._log(f"[{step_num}/{total_steps}] Succeeded on attempt {attempt + 1}")
+                    return result
+                
+                # Step returned failure
+                if attempt < max_retries:
+                    self._log(f"[{step_num}/{total_steps}] Attempt {attempt + 1} failed: {result.message}, retrying...")
+                    await asyncio.sleep(retry_delay / 1000)
+                    continue
+                
+                return result
+                
+            except Exception as e:
+                last_error = e
+                error_type = type(e).__name__.lower()
+                
+                # Check if we should retry this error type
+                should_retry = not retry_on or any(
+                    err_type.lower() in error_type for err_type in retry_on
+                )
+                
+                if attempt < max_retries and should_retry:
+                    self._log(f"[{step_num}/{total_steps}] Attempt {attempt + 1} failed: {e}, retrying...")
+                    await asyncio.sleep(retry_delay / 1000)
+                    continue
+                
+                # No more retries or error type not in retry_on list
+                raise
+        
+        # Should not reach here, but just in case
+        if last_error:
+            raise last_error
+        
+        return StepResult(success=False, message="Unknown error in retry logic")
 
     def load_flow(self, flow_path: Path) -> dict[str, Any]:
         """Load flow file."""
@@ -153,7 +215,14 @@ class FlowExecutor:
                         screenshots=screenshots,
                     )
 
-                    result = await step_instance.execute(step_context, params)
+                    # Execute with retry support
+                    result = await self._execute_with_retry(
+                        step_instance=step_instance,
+                        step_context=step_context,
+                        params=params,
+                        step_num=step_num,
+                        total_steps=total_steps,
+                    )
 
                     if not result.success:
                         raise RuntimeError(result.message)

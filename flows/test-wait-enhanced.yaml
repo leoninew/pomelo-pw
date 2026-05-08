@@ -1,0 +1,39 @@
+name: test-wait-enhanced
+description: Test enhanced wait capabilities for SPA
+
+variables:
+  base_url: "https://example.com"
+
+steps:
+  - type: navigate
+    url: "{{base_url}}"
+
+  # Wait for selector with state
+  - type: wait
+    selector: "h1"
+    state: "visible"
+    timeout: 5000
+
+  # Wait for URL to contain substring
+  - type: wait
+    url_contains: "example"
+    timeout: 5000
+
+  # Wait for network idle (useful for SPA)
+  - type: wait
+    network_idle: true
+    timeout: 10000
+
+  # Wait for animations to stabilize
+  - type: wait
+    animation_stable: true
+    timeout: 5000
+
+  # Wait for route to stabilize (URL doesn't change for 500ms)
+  - type: wait
+    route_stable: true
+    route_stable_duration: 500
+    timeout: 10000
+
+  - type: screenshot
+    file: "after-wait.png"

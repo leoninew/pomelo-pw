@@ -1,0 +1,35 @@
+name: test-retry
+description: Test step-level retry functionality
+
+variables:
+  base_url: "https://example.com"
+
+steps:
+  - type: navigate
+    url: "{{base_url}}"
+
+  # Retry on any error, 3 times with 1 second delay
+  - type: click
+    selector: ".maybe-flaky-button"
+    retry: 3
+    retry_delay: 1000
+
+  # Retry only on specific error types
+  - type: fill
+    selector: "input[name='username']"
+    value: "test"
+    retry: 2
+    retry_delay: 500
+    retry_on:
+      - "timeout"
+      - "element_not_found"
+
+  # Wait with retry (useful for dynamic content)
+  - type: wait
+    selector: ".dynamic-content"
+    timeout: 5000
+    retry: 3
+    retry_delay: 2000
+
+  - type: screenshot
+    file: "after-retry.png"
