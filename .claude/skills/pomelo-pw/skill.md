@@ -119,7 +119,10 @@ steps:
 ## Tips
 
 - Use `${variable}` syntax for dynamic values
-- Screenshots are saved to `output/` directory by default
+- Screenshots are saved to `./<flow-name>/` directory by default
+  - Output directory name is derived from flow filename (e.g., `my-flow.yaml` → `./my-flow/`)
+  - Path doesn't matter: `flows/test.yaml` → `./test/`, not `./flows/test/`
+- Use `-o` flag to specify custom output directory
 - Use `-v` flag for detailed execution logs
 - Validate flows before running with `validate` command
 - Override variables at runtime with `--var` flag

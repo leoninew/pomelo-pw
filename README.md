@@ -59,11 +59,17 @@ uvx pomelo-pw run my-flow.yaml
 ### Basic Commands
 
 ```bash
-# Run a flow
+# Run a flow (screenshots saved to ./flow/ directory, named after the flow file)
 pomelo-pw run flow.yaml
 
 # Run with verbose output
 pomelo-pw run flow.yaml -v
+
+# Specify custom output directory
+pomelo-pw run flow.yaml -o /custom/path
+
+# Note: Output directory name is derived from flow filename, regardless of path
+# Example: flows/my-test.yaml → ./my-test/
 
 # Override variables
 pomelo-pw run flow.yaml --var base_url=https://prod.example.com

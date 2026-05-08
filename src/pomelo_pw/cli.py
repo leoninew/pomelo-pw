@@ -23,7 +23,7 @@ def cli() -> None:
 @cli.command()
 @click.argument("flow", type=click.Path(exists=True))
 @click.option("--base-url", help="Override base URL variable")
-@click.option("--output", "-o", type=click.Path(), help="Output directory (default: ./output)")
+@click.option("--output", "-o", type=click.Path(), help="Output directory (default: ./<flow-name>, e.g., 'my-flow.yaml' → './my-flow/')")
 @click.option("--headless", is_flag=True, help="Run in headless mode (default: visible browser)")
 @click.option("--var", multiple=True, help="Override variable (format: key=value)")
 @click.option("--verbose", "-v", is_flag=True, help="Show step-by-step progress")
@@ -50,7 +50,7 @@ def run(
     if base_url:
         variables["base_url"] = base_url
 
-    output_dir = Path(output) if output else work_dir / "output"
+    output_dir = Path(output) if output else work_dir / flow_path.stem
 
     executor = FlowExecutor(work_dir=work_dir, verbose=verbose)
 
