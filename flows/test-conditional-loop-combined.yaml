@@ -1,0 +1,35 @@
+name: test-conditional-loop-combined
+description: Test conditional and loop combined
+
+variables:
+  base_url: "https://example.com"
+
+steps:
+  - type: navigate
+    url: "{{base_url}}"
+
+  # Conditional with loop inside
+  - type: if
+    condition: "element_exists: body"
+    then:
+      - type: loop
+        times: 2
+        steps:
+          - type: scroll
+            direction: down
+            distance: 200
+          - type: screenshot
+            file: "scroll-{{loop_index}}.png"
+
+  # Loop with conditional inside
+  - type: loop
+    times: 3
+    steps:
+      - type: if
+        condition: "element_visible: h1"
+        then:
+          - type: screenshot
+            file: "iteration-has-h1.png"
+        else:
+          - type: screenshot
+            file: "iteration-no-h1.png"

@@ -349,6 +349,138 @@ uv pip install pillow
 - Style regression testing
 - Component visual testing
 
+### Conditional Execution
+
+Execute steps based on conditions:
+
+```yaml
+# Check if element exists
+- type: if
+  condition: "element_exists: .login-button"
+  then:
+    - type: click
+      selector: ".login-button"
+  else:
+    - type: screenshot
+      file: "already-logged-in.png"
+
+# Check if element is visible
+- type: if
+  condition: "element_visible: .error-message"
+  then:
+    - type: screenshot
+      file: "error-state.png"
+
+# Check URL
+- type: if
+  condition: "url_contains: /dashboard"
+  then:
+    - type: screenshot
+      file: "dashboard.png"
+
+# JavaScript expression
+- type: if
+  condition: "document.querySelectorAll('.item').length > 5"
+  then:
+    - type: screenshot
+      file: "many-items.png"
+```
+
+**Condition types**:
+- `element_exists: selector` - Element exists in DOM
+- `element_visible: selector` - Element is visible
+- `element_hidden: selector` - Element is hidden or doesn't exist
+- `url_contains: text` - URL contains text
+- `url_matches: pattern` - URL matches regex pattern
+- `text_contains: text` - Page content contains text
+- JavaScript expression - Any valid JS that returns boolean
+
+**Use cases**:
+- Handle different page states
+- Skip steps based on conditions
+- Implement branching logic
+- Adapt to dynamic content
+
+### Loop Execution
+
+Repeat steps multiple times:
+
+```yaml
+# Fixed iteration count
+- type: loop
+  times: 5
+  steps:
+    - type: scroll
+      direction: down
+      distance: 500
+    - type: wait
+      duration: 300
+
+# Conditional loop (while)
+- type: loop
+  while: "element_visible: .load-more-button"
+  max_iterations: 10
+  steps:
+    - type: click
+      selector: ".load-more-button"
+    - type: wait
+      network_idle: true
+
+# Nested loops
+- type: loop
+  times: 3
+  steps:
+    - type: loop
+      times: 2
+      steps:
+        - type: screenshot
+          file: "nested-{{outer}}-{{inner}}.png"
+```
+
+**Parameters**:
+- `times`: Number of iterations (fixed count)
+- `while`: Condition to check before each iteration
+- `max_iterations`: Safety limit for while loops (default: 100)
+- `steps`: Steps to execute in each iteration
+
+**Use cases**:
+- Scroll through paginated content
+- Click "Load More" buttons repeatedly
+- Test repeated interactions
+- Generate multiple screenshots
+
+### Combined Patterns
+
+Combine conditionals and loops for complex workflows:
+
+```yaml
+# Loop with conditional inside
+- type: loop
+  times: 5
+  steps:
+    - type: if
+      condition: "element_exists: .next-page"
+      then:
+        - type: click
+          selector: ".next-page"
+        - type: wait
+          duration: 1000
+      else:
+        - type: screenshot
+          file: "last-page.png"
+
+# Conditional with loop inside
+- type: if
+  condition: "element_visible: .gallery"
+  then:
+    - type: loop
+      times: 10
+      steps:
+        - type: scroll
+          direction: down
+          distance: 300
+```
+
 | `type` | `selector`, `value` | Type text character by character |
 | `press` | `key` | Press a keyboard key |
 | `wait` | - | Wait for conditions (selector, url, timeout) |

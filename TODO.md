@@ -294,11 +294,17 @@ pomelo-pw record <url>             # 录制模式，生成 YAML
 
 ## 额外功能 (待评估)
 
-### 8. 条件执行和循环
+### 8. 条件执行和循环 ✅ COMPLETED
+
 ```yaml
-- type: click
-  selector: ".next-page"
-  if: "page_count > 1"
+- type: if
+  condition: "element_exists: .next-page"
+  then:
+    - type: click
+      selector: ".next-page"
+  else:
+    - type: screenshot
+      file: "last-page.png"
 
 - type: loop
   times: 5
@@ -307,7 +313,24 @@ pomelo-pw record <url>             # 录制模式，生成 YAML
       distance: 500
 ```
 
-### 9. 数据驱动测试
+**已完成**:
+- ✅ 实现 ConditionalStep (if step)
+- ✅ 支持多种条件类型（element_exists, element_visible, url_contains 等）
+- ✅ 支持 JavaScript 表达式
+- ✅ 支持 then/else 分支
+- ✅ 实现 LoopStep (loop step)
+- ✅ 支持固定次数循环 (times)
+- ✅ 支持条件循环 (while)
+- ✅ 支持嵌套循环和条件
+- ✅ 在 executor 中实现递归执行逻辑
+- ✅ 创建测试 flows
+- ✅ 更新文档
+
+**文件**: `src/pomelo_pw/steps/conditional.py`, `src/pomelo_pw/steps/loop.py`, `src/pomelo_pw/executor.py`
+
+---
+
+### 9. 数据驱动测试 🔜 NEXT
 ```yaml
 data:
   - {username: "user1", password: "pass1"}
