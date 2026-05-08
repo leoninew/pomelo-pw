@@ -108,6 +108,8 @@ pomelo-pw spec navigate
 | `uncheck` | `selector` | Uncheck a checkbox |
 | `evaluate` | `script` | Execute JavaScript |
 | `set-viewport` | - | Set viewport size |
+| `save-state` | `file` | Save browser state (cookies, localStorage) |
+| `load-state` | `file` | Load browser state from file |
 
 Run `pomelo-pw spec <step>` for detailed parameter information.
 
@@ -167,6 +169,57 @@ Any step can be retried automatically on failure:
     - "timeout"
     - "element_not_found"
 ```
+
+### Authentication State Reuse
+
+Save and reuse browser state (cookies, localStorage) to avoid repeated logins:
+
+```yaml
+# Flow 1: Login and save state
+name: login-flow
+steps:
+  - type: navigate
+    url: "https://example.com/login"
+  
+  - type: fill
+    selector: "input[name='username']"
+    value: "{{username}}"
+  
+  - type: fill
+    selector: "input[name='password']"
+    value: "{{password}}"
+  
+  - type: click
+    selector: "button[type='submit']"
+  
+  - type: wait
+    url_contains: "/dashboard"
+  
+  # Save authentication state
+  - type: save-state
+    file: "auth-state.json"
+
+# Flow 2: Reuse saved state (no login needed)
+name: use-saved-auth
+steps:
+  - type: navigate
+    url: "https://example.com"
+  
+  # Load saved authentication
+  - type: load-state
+    file: "auth-state.json"
+  
+  # Now you're logged in!
+  - type: navigate
+    url: "https://example.com/dashboard"
+```
+
+**Benefits**:
+- Skip login in subsequent flows
+- Faster test execution
+- Reduce load on authentication servers
+- Share authentication across multiple flows
+
 | `type` | `selector`, `value` | Type text character by character |
 | `press` | `key` | Press a keyboard key |
 | `wait` | - | Wait for conditions (selector, url, timeout) |

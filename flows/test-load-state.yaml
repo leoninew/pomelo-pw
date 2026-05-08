@@ -1,0 +1,25 @@
+name: test-load-state
+description: Reuse saved authentication state (no login needed)
+
+variables:
+  base_url: "https://example.com"
+
+steps:
+  # Navigate to the site
+  - type: navigate
+    url: "{{base_url}}"
+
+  # Load saved authentication state
+  - type: load-state
+    file: "auth-state.json"
+
+  # Navigate to protected page (should work without login)
+  - type: navigate
+    url: "{{base_url}}/dashboard"
+
+  - type: wait
+    selector: ".dashboard-content"
+    timeout: 5000
+
+  - type: screenshot
+    file: "dashboard-with-loaded-state.png"

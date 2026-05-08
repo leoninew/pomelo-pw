@@ -172,7 +172,34 @@ steps:
 
 ## Phase 3: 中期实施 (2-4 周)
 
-### 5. 页面快照/Locator 探索
+### 6. 登录态复用 ✅ COMPLETED
+
+**新增 steps**:
+```yaml
+# 保存登录态
+- type: save-state
+  file: "auth-state.json"
+
+# 加载登录态
+- type: load-state
+  file: "auth-state.json"
+```
+
+**实现**: 使用 Playwright 的 `storage_state()` API
+
+**已完成**:
+- ✅ 实现 `save-state` step
+- ✅ 实现 `load-state` step
+- ✅ 支持 cookies 和 localStorage
+- ✅ 自动处理路径解析
+- ✅ 创建测试 flows（test-save-state.yaml, test-load-state.yaml）
+- ✅ 更新文档
+
+**文件**: `src/pomelo_pw/steps/save_state.py`, `src/pomelo_pw/steps/load_state.py`
+
+---
+
+### 5. 页面快照/Locator 探索 🔜 NEXT
 **新增命令**:
 ```bash
 pomelo-pw explore <url>            # 交互式探索模式

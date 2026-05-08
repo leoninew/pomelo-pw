@@ -5,7 +5,7 @@ All notable changes to Pomelo PW will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.0] - 2025-01-XX
+## [0.2.2] - 2025-01-XX
 
 ### Added
 - **Enhanced SPA wait capabilities**: Multiple new wait conditions for modern web applications
@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `retry_delay`: Delay between retries in milliseconds
   - `retry_on`: List of error types to retry on (optional filter)
   - Detailed retry logging in verbose mode
+- **Authentication state reuse**: Save and load browser state
+  - `save-state`: Save cookies and localStorage to file
+  - `load-state`: Load saved state to skip login
+  - Useful for avoiding repeated logins across flows
 
 ### Changed
 - `wait` step now supports more flexible conditions for SPA applications
@@ -37,7 +41,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   selector: ".button"
   retry: 3
   retry_delay: 1000
+
+# Save/load authentication
+- type: save-state
+  file: "auth.json"
+- type: load-state
+  file: "auth.json"
 ```
+
+## [0.2.1] - 2025-01-XX
+
+### Changed
+- Default output directory from `./output/` to `./<flow-name>/`
 
 ## [0.2.0] - 2025-01-XX
 
@@ -73,6 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Type-safe step validation
 - Development mode with system Chrome detection
 
-[0.3.0]: https://github.com/yourusername/pomelo-pw/compare/v0.2.0...v0.3.0
+[0.2.2]: https://github.com/yourusername/pomelo-pw/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/yourusername/pomelo-pw/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/yourusername/pomelo-pw/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/yourusername/pomelo-pw/releases/tag/v0.1.1
