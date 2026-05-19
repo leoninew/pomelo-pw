@@ -31,6 +31,13 @@ class FlowExecutor:
         if self.verbose:
             click.echo(msg)
 
+    def _normalize_retry_params(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Normalize retry parameters for consistent handling."""
+        retry_on = params.get("retry_on", [])
+        if isinstance(retry_on, str):
+            params = {**params, "retry_on": [retry_on]}
+        return params
+
     async def _execute_with_retry(
         self,
         step_instance: BaseStep,
@@ -46,9 +53,10 @@ class FlowExecutor:
         - retry_delay: delay between retries in milliseconds (default: 1000)
         - retry_on: list of error types to retry on (default: all errors)
         """
+        params = self._normalize_retry_params(params)
         max_retries = params.get("retry", 0)
         retry_delay = params.get("retry_delay", 1000)
-        retry_on = params.get("retry_on", [])  # Empty list means retry on all errors
+        retry_on = params.get("retry_on", [])
 
         last_error: Exception | None = None
 

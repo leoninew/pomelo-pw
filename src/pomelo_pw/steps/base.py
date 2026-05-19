@@ -81,8 +81,7 @@ class BaseStep(ABC):
                 errors.append(f"Missing required parameter: {param}")
 
         all_params = set(cls.spec.required_params) | set(cls.spec.optional_params.keys())
-        all_params.add("type")
-        all_params.add("variables")
+        all_params.update({"type", "variables", "retry", "retry_delay", "retry_on"})
 
         for param in params:
             if param not in all_params:
