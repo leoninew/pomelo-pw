@@ -16,12 +16,12 @@ from pomelo_pw.executor import FlowExecutor
 from pomelo_pw.steps import get_step, list_steps
 
 
-@click.group()
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
 def cli() -> None:
     """Pomelo PW - Flow-based UI Automation Tool."""
 
 
-@cli.command()
+@cli.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.argument("flow", type=click.Path(exists=True))
 @click.option("--base-url", help="Override base URL variable")
 @click.option(
@@ -83,7 +83,7 @@ def run(
             sys.exit(1)
 
 
-@cli.command()
+@cli.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.argument("flow", type=click.Path(exists=True))
 @click.option("--json", "json_output", is_flag=True, help="Output result as JSON")
 def validate(flow: str, json_output: bool) -> None:
@@ -104,7 +104,7 @@ def validate(flow: str, json_output: bool) -> None:
             click.echo("Validation passed")
 
 
-@cli.command()
+@cli.command(context_settings={"help_option_names": ["-h", "--help"]})
 def install() -> None:
     """Install Playwright browser (chromium)."""
     click.echo("Installing Playwright chromium browser...")
@@ -123,7 +123,7 @@ def install() -> None:
         sys.exit(1)
 
 
-@cli.command("list")
+@cli.command("list", context_settings={"help_option_names": ["-h", "--help"]})
 def list_flows() -> None:
     """List available flows in current directory."""
     work_dir = Path.cwd()
@@ -138,7 +138,7 @@ def list_flows() -> None:
         click.echo(f"  - {flow_file.name}")
 
 
-@cli.command()
+@cli.command(context_settings={"help_option_names": ["-h", "--help"]})
 def steps() -> None:
     """List available step types."""
     click.echo("Available steps:")
@@ -148,7 +148,7 @@ def steps() -> None:
             click.echo(f"  {step_name}: {step_class.spec.description}")
 
 
-@cli.command()
+@cli.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.argument("step_type")
 def spec(step_type: str) -> None:
     """Show specification for a step type."""
@@ -172,7 +172,7 @@ def spec(step_type: str) -> None:
         click.echo(f"  - {p}: {default}")
 
 
-@cli.command()
+@cli.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.argument("url")
 @click.option("--headless", is_flag=True, help="Run in headless mode")
 def explore(url: str, headless: bool) -> None:
@@ -187,7 +187,7 @@ def explore(url: str, headless: bool) -> None:
         asyncio.run(explore_page(url, headless=headless))
 
 
-@cli.command()
+@cli.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.argument("url")
 @click.argument("output", type=click.Path())
 @click.option("--headless", is_flag=True, help="Run in headless mode")
