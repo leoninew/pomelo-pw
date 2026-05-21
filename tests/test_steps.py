@@ -1,7 +1,14 @@
 """Tests for step classes."""
 
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
 from pomelo_pw.steps import get_step, list_steps
+from pomelo_pw.steps.base import StepContext
 from pomelo_pw.steps.click import ClickStep
+from pomelo_pw.steps.evaluate import EvaluateStep
 from pomelo_pw.steps.fill import FillStep
 from pomelo_pw.steps.navigate import NavigateStep
 from pomelo_pw.steps.screenshot import ScreenshotStep
@@ -116,6 +123,83 @@ class TestClickStepValidation:
         """Test validation passes with selector."""
         errors = ClickStep.validate_params({"type": "click", "selector": "#button"})
         assert len(errors) == 0
+
+    def test_validate_with_retry_params(self) -> None:
+        """Test validation allows documented retry params."""
+        errors = ClickStep.validate_params(
+            {
+                "type": "click",
+                "selector": "#button",
+                "retry": 2,
+                "retry_delay": 100,
+                "retry_on": ["timeout"],
+            }
+        )
+        assert len(errors) == 0
+
+    def test_validate_with_wait_after(self) -> None:
+        """Test validation allows post-click wait params."""
+        errors = ClickStep.validate_params(
+            {
+                "type": "click",
+                "selector": "#button",
+                "wait_after": "reload",
+                "wait_after_timeout": 1000,
+            }
+        )
+        assert len(errors) == 0
+
+
+class TestClickStepExecution:
+    """Tests for click step execution."""
+
+    @pytest.mark.asyncio
+    async def test_click_waits_for_network_idle(self) -> None:
+        """Test wait_after network_idle waits after click."""
+        page = MagicMock()
+        page.click = AsyncMock()
+        page.wait_for_load_state = AsyncMock()
+        context = StepContext(page=page, variables={}, output_dir=Path("/tmp"), screenshots=[])
+
+        result = await ClickStep().execute(context, {"selector": "#button", "wait_after": "network_idle"})
+
+        assert result.success
+        page.click.assert_awaited_once()
+        page.wait_for_load_state.assert_awaited_once_with("networkidle", timeout=30000)
+
+
+class TestEvaluateStepExecution:
+    """Tests for evaluate step execution."""
+
+    @pytest.mark.asyncio
+    async def test_evaluate_reports_result_and_console(self) -> None:
+        """Test evaluate result includes return value and console output."""
+        listeners = {}
+        page = MagicMock()
+
+        def on(event: str, callback: object) -> None:
+            listeners[event] = callback
+
+        async def evaluate(script: str) -> str:
+            message = MagicMock()
+            message.type = "log"
+            message.text = "hello"
+            listeners["console"](message)
+            return "ok"
+
+        page.on.side_effect = on
+        page.evaluate = AsyncMock(side_effect=evaluate)
+        page.remove_listener = MagicMock()
+        context = StepContext(page=page, variables={}, output_dir=Path("/tmp"), screenshots=[])
+
+        result = await EvaluateStep().execute(context, {"script": "console.log('hello'); return 'ok'"})
+
+        assert result.success
+        assert result.data["result"] == "ok"
+        assert result.data["console"] == ["log: hello"]
+        assert 'result="ok"' in result.message
+        assert 'console=["log: hello"]' in result.message
+        page.remove_listener.assert_called_once()
 
 
 class TestFillStepValidation:
