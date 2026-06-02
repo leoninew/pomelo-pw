@@ -1,5 +1,7 @@
 # Pomelo PW
 
+[中文](README.zh-CN.md) | English
+
 Flow-based UI automation tool powered by Playwright. Define your browser automation workflows in declarative YAML files with type-safe step validation and flexible variable substitution.
 
 ## Features
