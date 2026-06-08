@@ -29,6 +29,7 @@ SEND_EXCLUDES = [
     "--filter=:- .gitignore",
     "--exclude=scripts",
     "--exclude=docs",
+    "--exclude=TODO.md",
 ]
 
 # fetch 排除规则
