@@ -56,7 +56,7 @@ class TestFlowExecutorValidation:
             "name": "test-flow",
             "variables": {"base_url": "https://example.com"},
             "steps": [
-                {"type": "navigate", "url": "${base_url}"},
+                {"type": "navigate", "url": "{{base_url}}"},
                 {"type": "screenshot", "file": "test.png"},
             ],
         }
@@ -113,8 +113,8 @@ class TestFlowExecutorVariables:
                 "username": "admin",
             },
             "steps": [
-                {"type": "navigate", "url": "${base_url}/login"},
-                {"type": "fill", "selector": "#user", "value": "${username}"},
+                {"type": "navigate", "url": "{{base_url}}/login"},
+                {"type": "fill", "selector": "#user", "value": "{{username}}"},
             ],
         }
         errors = executor.validate_flow(flow)

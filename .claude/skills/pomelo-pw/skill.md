@@ -51,7 +51,7 @@ Use `{{ }}` — doesn't conflict with JS/Shell template literals:
   script: "const token = '{{api_token}}'; fetch(`/api?token=${token}`)"
 ```
 
-Legacy `${ }` is still supported for backward compatibility.
+`${ }` is reserved for host languages such as JavaScript and is not processed as flow variable syntax.
 
 ### Output Directory
 

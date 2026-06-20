@@ -87,7 +87,7 @@ class NavigateStep(BaseStep):
 
 ### 2. 变量替换
 
-支持 `${var}` 语法，三级优先级：
+支持 `{{var}}` 语法，三级优先级：
 
 ```
 CLI 参数 > 步骤级变量 > 流程级变量
@@ -150,18 +150,18 @@ variables:
 
 steps:
   - type: navigate
-    url: "${base_url}/login"
+    url: "{{base_url}}/login"
 
   - type: screenshot
     file: "01-login.png"
 
   - type: fill
     selector: "input[name='username']"
-    value: "${username}"
+    value: "{{username}}"
 
   - type: fill
     selector: "input[name='password']"
-    value: "${password}"
+    value: "{{password}}"
 
   - type: click
     selector: "button[type='submit']"

@@ -14,7 +14,7 @@ class TestSubstituteVars:
 
     def test_simple_substitution(self) -> None:
         """Test simple variable substitution."""
-        params = {"url": "${base_url}/login"}
+        params = {"url": "{{base_url}}/login"}
         variables = {"base_url": "https://example.com"}
 
         result = substitute_vars(params, variables)
@@ -23,7 +23,7 @@ class TestSubstituteVars:
 
     def test_multiple_variables(self) -> None:
         """Test multiple variable substitutions in one value."""
-        params = {"text": "${greeting}, ${name}!"}
+        params = {"text": "{{greeting}}, {{name}}!"}
         variables = {"greeting": "Hello", "name": "World"}
 
         result = substitute_vars(params, variables)
@@ -32,10 +32,10 @@ class TestSubstituteVars:
 
     def test_nested_variable(self) -> None:
         """Test nested variable reference."""
-        params = {"url": "${login_url}"}
+        params = {"url": "{{login_url}}"}
         variables = {
             "base_url": "https://example.com",
-            "login_url": "${base_url}/login",
+            "login_url": "{{base_url}}/login",
         }
 
         result = substitute_vars(params, variables)
@@ -44,7 +44,7 @@ class TestSubstituteVars:
 
     def test_empty_variable_value(self) -> None:
         """Test empty variable value is allowed."""
-        params = {"value": "${empty_var}"}
+        params = {"value": "{{empty_var}}"}
         variables = {"empty_var": ""}
 
         result = substitute_vars(params, variables)
@@ -53,7 +53,7 @@ class TestSubstituteVars:
 
     def test_undefined_variable_raises_error(self) -> None:
         """Test undefined variable raises UndefinedVariableError."""
-        params = {"url": "${undefined_var}"}
+        params = {"url": "{{undefined_var}}"}
         variables = {"base_url": "https://example.com"}
 
         with pytest.raises(UndefinedVariableError) as exc_info:
@@ -63,10 +63,10 @@ class TestSubstituteVars:
 
     def test_circular_reference_raises_error(self) -> None:
         """Test circular reference raises CircularReferenceError."""
-        params = {"a": "${b}"}
+        params = {"a": "{{b}}"}
         variables = {
-            "a": "${b}",
-            "b": "${a}",
+            "a": "{{b}}",
+            "b": "{{a}}",
         }
 
         with pytest.raises(CircularReferenceError) as exc_info:
@@ -76,7 +76,7 @@ class TestSubstituteVars:
 
     def test_dict_value_substitution(self) -> None:
         """Test substitution in nested dict values."""
-        params = {"options": {"url": "${base_url}/api"}}
+        params = {"options": {"url": "{{base_url}}/api"}}
         variables = {"base_url": "https://example.com"}
 
         result = substitute_vars(params, variables)
@@ -85,7 +85,7 @@ class TestSubstituteVars:
 
     def test_list_value_substitution(self) -> None:
         """Test substitution in list values."""
-        params = {"urls": ["${base_url}/a", "${base_url}/b"]}
+        params = {"urls": ["{{base_url}}/a", "{{base_url}}/b"]}
         variables = {"base_url": "https://example.com"}
 
         result = substitute_vars(params, variables)
@@ -128,9 +128,18 @@ class TestSubstituteVars:
 
         assert result == {"script": "const token = 'abc123'; fetch(`/api?token=${token}`)"}
 
-    def test_single_brace_backward_compat(self) -> None:
-        """Test ${ } syntax still works when {{ }} is not used."""
+    def test_dollar_brace_syntax_remains_unchanged(self) -> None:
+        """Test ${ } syntax is left for host languages like JavaScript."""
         params = {"url": "${base_url}/login"}
+        variables = {"base_url": "https://example.com"}
+
+        result = substitute_vars(params, variables)
+
+        assert result == {"url": "${base_url}/login"}
+
+    def test_double_brace_syntax_allows_inner_whitespace(self) -> None:
+        """Test double brace syntax supports spaces around variable names."""
+        params = {"url": "{{ base_url }}/login"}
         variables = {"base_url": "https://example.com"}
 
         result = substitute_vars(params, variables)

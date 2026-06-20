@@ -6,7 +6,7 @@ Flow-based UI automation tool powered by Playwright. Define your browser automat
 
 - **Declarative YAML flows**: Define UI automation workflows in simple, readable YAML
 - **Type-safe steps**: Built-in validation for all step parameters
-- **Variable substitution**: Support for `{{ var }}` and `${ var }` syntax with multi-level priority
+- **Variable substitution**: Support for `{{ var }}` syntax with multi-level priority
 - **Rich error context**: Automatic screenshot, HTML snapshot, console/network errors on failure
 - **Enhanced SPA support**: URL pattern matching, network idle, animation stable, route stable waits
 - **Step-level retry**: Automatic retry with configurable delay and error type filtering
@@ -56,7 +56,7 @@ variables:
 
 steps:
   - type: navigate
-    url: "${base_url}"
+    url: "{{base_url}}"
 
   - type: screenshot
     file: "homepage.png"
@@ -563,36 +563,29 @@ variables:
 
 steps:
   - type: step-type
-    param1: "${var1}"
+    param1: "{{var1}}"
     param2: "literal value"
 ```
 
 ### Variable Substitution
 
-Variables use two syntax options:
+Variables use `{{ }}` syntax so JavaScript/Shell `${ }` expressions remain untouched:
 
-**Recommended: `{{ }}` syntax** (doesn't conflict with JS/Shell)
 ```yaml
 variables:
+  base_url: "https://example.com"
   api_token: "abc123"
 
 steps:
+  - type: navigate
+    url: "{{base_url}}/login"
+
   - type: evaluate
     script: "const token = '{{api_token}}'; fetch(`/api?token=${token}`)"
     # {{api_token}} is replaced, ${token} is preserved as JS template string
 ```
 
-**Legacy: `${ }` syntax** (backward compatible, but avoid in scripts)
-```yaml
-variables:
-  base_url: "https://example.com"
-
-steps:
-  - type: navigate
-    url: "${base_url}/login"
-```
-
-**Important**: If a string contains `{{ }}`, only `{{ }}` will be processed. This prevents conflicts with JavaScript template strings, shell variables, etc.
+`${ }` is not processed as a flow variable syntax.
 
 Variable priority (three levels):
 

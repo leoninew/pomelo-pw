@@ -15,7 +15,7 @@ def sample_flow() -> dict[str, Any]:
             "username": "admin",
         },
         "steps": [
-            {"type": "navigate", "url": "${base_url}/login"},
+            {"type": "navigate", "url": "{{base_url}}/login"},
             {"type": "screenshot", "file": "login.png"},
         ],
     }
