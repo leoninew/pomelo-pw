@@ -1,5 +1,6 @@
 """Tests for step classes."""
 
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -174,13 +175,13 @@ class TestEvaluateStepExecution:
     @pytest.mark.asyncio
     async def test_evaluate_reports_result_and_console(self) -> None:
         """Test evaluate result includes return value and console output."""
-        listeners = {}
+        listeners: dict[str, Callable[[object], None]] = {}
         page = MagicMock()
 
-        def on(event: str, callback: object) -> None:
+        def on(event: str, callback: Callable[[object], None]) -> None:
             listeners[event] = callback
 
-        async def evaluate(script: str) -> str:
+        async def evaluate(script: str, arg: str | None = None) -> str:
             message = MagicMock()
             message.type = "log"
             message.text = "hello"
@@ -199,7 +200,30 @@ class TestEvaluateStepExecution:
         assert result.data["console"] == ["log: hello"]
         assert 'result="ok"' in result.message
         assert 'console=["log: hello"]' in result.message
+        page.evaluate.assert_awaited_once()
+        evaluate_script, evaluate_arg = page.evaluate.await_args.args
+        assert "type = 'module'" in evaluate_script
+        assert "__pomeloEvaluateResult = 'ok';" in evaluate_arg
         page.remove_listener.assert_called_once()
+
+    def test_prepare_module_script_supports_top_level_await(self) -> None:
+        """Test module script preparation keeps top-level await intact."""
+        script = "const response = await fetch('/api');\nreturn await response.json();"
+
+        module_script = EvaluateStep()._prepare_module_script(script)
+
+        assert "const response = await fetch('/api');" in module_script
+        assert "__pomeloEvaluateResult = await response.json();" in module_script
+        assert "return await response.json();" not in module_script
+
+    def test_function_expression_evaluates_directly(self) -> None:
+        """Test existing function expressions are still passed directly to Playwright."""
+        step = EvaluateStep()
+
+        assert step._is_function_expression("() => 1")
+        assert step._is_function_expression("function () { return 1; }")
+        assert step._is_function_expression("async function () { return 1; }")
+        assert not step._is_function_expression("return 1;")
 
 
 class TestFillStepValidation:

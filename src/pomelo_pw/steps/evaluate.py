@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from playwright.async_api import ConsoleMessage
@@ -32,13 +33,12 @@ class EvaluateStep(BaseStep):
         def collect_console(message: ConsoleMessage) -> None:
             console_messages.append(f"{message.type}: {message.text}")
 
-        # Auto-wrap if not already a function expression
-        if not (script.startswith("(") or script.startswith("function")):
-            script = f"(() => {{ {script} }})()"
-
         context.page.on("console", collect_console)
         try:
-            result = await context.page.evaluate(script)
+            if self._is_function_expression(script):
+                result = await context.page.evaluate(script)
+            else:
+                result = await self._evaluate_module(context, script)
         finally:
             context.page.remove_listener("console", collect_console)
 
@@ -53,6 +53,58 @@ class EvaluateStep(BaseStep):
             message="; ".join(message_parts),
             data={"result": result, "console": console_messages},
         )
+
+    def _is_function_expression(self, script: str) -> bool:
+        """Return True when Playwright can evaluate script directly."""
+        return script.startswith("(") or bool(re.match(r"^(async\s+)?function\b", script))
+
+    async def _evaluate_module(self, context: StepContext, script: str) -> Any:
+        """Evaluate script as a browser module so top-level await is supported."""
+        return await context.page.evaluate(
+            """async (script) => {
+                const moduleScript = document.createElement('script');
+                const doneName = `__pomeloEvaluateDone_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+                return await new Promise((resolve, reject) => {
+                    const cleanup = () => {
+                        delete globalThis[doneName];
+                        moduleScript.remove();
+                    };
+                    globalThis[doneName] = ({result, error}) => {
+                        cleanup();
+                        if (error) {
+                            reject(error);
+                            return;
+                        }
+                        resolve(result);
+                    };
+                    moduleScript.onerror = (event) => {
+                        cleanup();
+                        reject(new Error(event.message || 'Failed to evaluate module script'));
+                    };
+                    moduleScript.type = 'module';
+                    moduleScript.textContent = `
+                        try {
+                            let __pomeloEvaluateResult;
+                            ${script}
+                            globalThis[${JSON.stringify(doneName)}]({result: __pomeloEvaluateResult});
+                        } catch (error) {
+                            globalThis[${JSON.stringify(doneName)}]({error});
+                        }
+                    `;
+                    document.head.appendChild(moduleScript);
+                });
+            }""",
+            self._prepare_module_script(script),
+        )
+
+    def _prepare_module_script(self, script: str) -> str:
+        """Convert the legacy trailing return form into a module result assignment."""
+        match = re.search(r"return(?:\s+([\s\S]*?))?;?\s*$", script.rstrip())
+        if match is None:
+            return script
+        expression = match.group(1) or "undefined"
+        return f"{script[: match.start()]}__pomeloEvaluateResult = {expression};"
 
     def _format_value(self, value: Any) -> str:
         """Format values for concise CLI output."""
