@@ -649,7 +649,7 @@ make test
 make check
 
 # Run example flow
-make example
+make run ARGS="run flows/example.yaml"
 ```
 
 ### Development Mode
