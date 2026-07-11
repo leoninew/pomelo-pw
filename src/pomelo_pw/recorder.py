@@ -8,6 +8,9 @@ import click
 import yaml
 from playwright.async_api import Page, async_playwright
 
+from pomelo_pw.browser import BrowserLifecycle
+from pomelo_pw.config import load_app_config
+
 
 class FlowRecorder:
     """Records user interactions and generates YAML flow."""
@@ -292,42 +295,46 @@ async def record_flow(url: str, output: str, headless: bool = False) -> None:
     click.echo("  • Press Ctrl+C to stop and save")
     click.echo("━" * 60)
 
+    browser_lifecycle = BrowserLifecycle(load_app_config().playwright)
+
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=headless)
-        context = await browser.new_context()
-        page = await context.new_page()
-
+        browser = await browser_lifecycle.launch(p, headless=headless)
         try:
-            await page.goto(url, wait_until="domcontentloaded")
+            context = await browser_lifecycle.new_context(browser)
+            try:
+                page = await context.new_page()
+                await page.goto(url, wait_until="domcontentloaded")
 
-            recorder = FlowRecorder(page, flow_name)
-            await recorder.inject_recorder_ui()
+                recorder = FlowRecorder(page, flow_name)
+                await recorder.inject_recorder_ui()
 
-            click.echo(f"\n✓ Recorder ready at: {url}")
+                click.echo(f"\n✓ Recorder ready at: {url}")
 
-            # Wait for recording
-            await recorder.wait_for_recording()
+                # Wait for recording
+                await recorder.wait_for_recording()
 
-            # Get recorded steps
-            steps = await recorder.get_recorded_steps()
+                # Get recorded steps
+                steps = await recorder.get_recorded_steps()
 
-            if not steps:
-                click.echo("\n⚠ No steps recorded")
-                return
+                if not steps:
+                    click.echo("\n⚠ No steps recorded")
+                    return
 
-            # Generate and save flow
-            flow = recorder.generate_flow(steps, url)
-            recorder.save_flow(flow, Path(output))
+                # Generate and save flow
+                flow = recorder.generate_flow(steps, url)
+                recorder.save_flow(flow, Path(output))
 
-            # Display summary
-            click.echo("\n" + "=" * 60)
-            click.echo("Flow Summary:")
-            click.echo("=" * 60)
-            click.echo(f"Steps: {len(steps)}")
-            click.echo(f"Output: {output}")
-            click.echo("=" * 60)
+                # Display summary
+                click.echo("\n" + "=" * 60)
+                click.echo("Flow Summary:")
+                click.echo("=" * 60)
+                click.echo(f"Steps: {len(steps)}")
+                click.echo(f"Output: {output}")
+                click.echo("=" * 60)
 
-        except KeyboardInterrupt:
-            click.echo("\n\n⏹ Recording cancelled")
+            except KeyboardInterrupt:
+                click.echo("\n\n⏹ Recording cancelled")
+            finally:
+                await context.close()
         finally:
             await browser.close()

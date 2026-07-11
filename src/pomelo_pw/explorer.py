@@ -5,6 +5,9 @@ import asyncio
 import click
 from playwright.async_api import Page, async_playwright
 
+from pomelo_pw.browser import BrowserLifecycle
+from pomelo_pw.config import load_app_config
+
 
 class PageExplorer:
     """Interactive page explorer for discovering element selectors."""
@@ -262,38 +265,41 @@ async def explore_page(url: str, headless: bool = False) -> None:
     click.echo("  • Press Ctrl+C to exit")
     click.echo("━" * 60)
 
+    browser_lifecycle = BrowserLifecycle(load_app_config().playwright)
+
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=headless)
-        context = await browser.new_context()
-        page = await context.new_page()
-
+        browser = await browser_lifecycle.launch(p, headless=headless)
         try:
-            await page.goto(url, wait_until="domcontentloaded")
+            context = await browser_lifecycle.new_context(browser)
+            try:
+                page = await context.new_page()
+                await page.goto(url, wait_until="domcontentloaded")
 
-            explorer = PageExplorer(page)
-            await explorer.inject_explorer_ui()
+                explorer = PageExplorer(page)
+                await explorer.inject_explorer_ui()
 
-            click.echo(f"\n✓ Explorer ready at: {url}\n")
+                click.echo(f"\n✓ Explorer ready at: {url}\n")
 
-            # Keep the browser open and wait for selections
-            while True:
-                selectors = await explorer.wait_for_selection()
+                # Keep the browser open and wait for selections
+                while True:
+                    selectors = await explorer.wait_for_selection()
 
-                click.echo("\n" + "=" * 60)
-                click.echo("Selected Element Selectors:")
-                click.echo("=" * 60)
+                    click.echo("\n" + "=" * 60)
+                    click.echo("Selected Element Selectors:")
+                    click.echo("=" * 60)
 
-                # Display in priority order
-                priority = ["data_test", "id", "role", "text", "class", "css", "xpath"]
-                for key in priority:
-                    if key in selectors:
-                        label = key.replace("_", "-").upper()
-                        value = selectors[key]
-                        click.echo(f"{label:12} {value}")
+                    # Display in priority order
+                    priority = ["data_test", "id", "role", "text", "class", "css", "xpath"]
+                    for key in priority:
+                        if key in selectors:
+                            label = key.replace("_", "-").upper()
+                            value = selectors[key]
+                            click.echo(f"{label:12} {value}")
 
-                click.echo("=" * 60 + "\n")
-
-        except KeyboardInterrupt:
-            click.echo("\n\n👋 Explorer closed")
+                    click.echo("=" * 60 + "\n")
+            except KeyboardInterrupt:
+                click.echo("\n\n👋 Explorer closed")
+            finally:
+                await context.close()
         finally:
             await browser.close()

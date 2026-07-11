@@ -11,6 +11,7 @@ import click
 import yaml
 from playwright.async_api import async_playwright
 
+from pomelo_pw.browser import BrowserLifecycle
 from pomelo_pw.config import load_app_config
 from pomelo_pw.error_context import ErrorContextCollector
 from pomelo_pw.steps import get_step
@@ -25,6 +26,7 @@ class FlowExecutor:
         self.work_dir = work_dir or Path.cwd()
         self.verbose = verbose
         self.config = load_app_config()
+        self.browser_lifecycle = BrowserLifecycle(self.config.playwright)
 
     def _log(self, msg: str) -> None:
         """Output progress message."""
@@ -310,16 +312,18 @@ class FlowExecutor:
         click.echo(f"Launching browser (headless={headless})...")
         async with async_playwright() as p:
             browser = await self._launch_browser(p, headless)
-            result = await self._run_once(
-                browser=browser,
-                flow=flow,
-                flow_path=flow_path,
-                steps=steps,
-                global_vars=base_vars,
-                output=output,
-                start_time=start_time,
-            )
-            await browser.close()
+            try:
+                result = await self._run_once(
+                    browser=browser,
+                    flow=flow,
+                    flow_path=flow_path,
+                    steps=steps,
+                    global_vars=base_vars,
+                    output=output,
+                    start_time=start_time,
+                )
+            finally:
+                await browser.close()
 
         return result
 
@@ -349,39 +353,39 @@ class FlowExecutor:
         click.echo(f"Launching browser (headless={headless})...")
         async with async_playwright() as p:
             browser = await self._launch_browser(p, headless)
+            try:
+                for row_idx, row in enumerate(data_rows):
+                    row_num = str(row_idx + 1).zfill(row_width)
+                    row_label = row.get("_label", f"row-{row_num}")
+                    row_output = output / row_label
+                    row_output.mkdir(parents=True, exist_ok=True)
 
-            for row_idx, row in enumerate(data_rows):
-                row_num = str(row_idx + 1).zfill(row_width)
-                row_label = row.get("_label", f"row-{row_num}")
-                row_output = output / row_label
-                row_output.mkdir(parents=True, exist_ok=True)
+                    # Merge base vars with row data (row takes precedence)
+                    row_vars = {**base_vars, **row}
 
-                # Merge base vars with row data (row takes precedence)
-                row_vars = {**base_vars, **row}
+                    click.echo(f"\n[{row_num}/{len(data_rows)}] Running with data: {row_label}")
 
-                click.echo(f"\n[{row_num}/{len(data_rows)}] Running with data: {row_label}")
+                    row_start = time.time()
+                    result = await self._run_once(
+                        browser=browser,
+                        flow=flow,
+                        flow_path=flow_path,
+                        steps=steps,
+                        global_vars=row_vars,
+                        output=row_output,
+                        start_time=row_start,
+                    )
 
-                row_start = time.time()
-                result = await self._run_once(
-                    browser=browser,
-                    flow=flow,
-                    flow_path=flow_path,
-                    steps=steps,
-                    global_vars=row_vars,
-                    output=row_output,
-                    start_time=row_start,
-                )
+                    result["row"] = row_label
+                    result["row_data"] = row
+                    row_results.append(result)
+                    all_screenshots.extend(result.get("screenshots", []))
 
-                result["row"] = row_label
-                result["row_data"] = row
-                row_results.append(result)
-                all_screenshots.extend(result.get("screenshots", []))
-
-                if not result["success"] and on_error == "stop":
-                    click.echo(f"Stopping data-driven run at row {row_num} due to error")
-                    break
-
-            await browser.close()
+                    if not result["success"] and on_error == "stop":
+                        click.echo(f"Stopping data-driven run at row {row_num} due to error")
+                        break
+            finally:
+                await browser.close()
 
         total_ms = int((time.time() - start_time) * 1000)
         passed = sum(1 for r in row_results if r["success"])
@@ -403,15 +407,7 @@ class FlowExecutor:
 
     async def _launch_browser(self, p: Any, headless: bool) -> Any:
         """Launch browser with configured options."""
-        pw_config = self.config.playwright
-        launch_options: dict[str, Any] = {
-            "headless": headless,
-            "timeout": pw_config.timeout,
-            "slow_mo": pw_config.slow_mo,
-        }
-        if pw_config.executable_path:
-            launch_options["executable_path"] = pw_config.executable_path
-        return await p.chromium.launch(**launch_options)
+        return await self.browser_lifecycle.launch(p, headless=headless)
 
     async def _run_once(
         self,
@@ -424,110 +420,108 @@ class FlowExecutor:
         start_time: float,
     ) -> dict[str, Any]:
         """Execute all steps once with the given variables."""
-        pw_config = self.config.playwright
         flow_name = flow.get("name", flow_path.stem)
         total_steps = len(steps)
         step_width = len(str(total_steps))
 
-        context = await browser.new_context(
-            viewport={"width": pw_config.viewport.width, "height": pw_config.viewport.height},
-        )
-        page = await context.new_page()
+        context = await self.browser_lifecycle.new_context(browser)
+        try:
+            page = await context.new_page()
 
-        error_collector = ErrorContextCollector()
-        error_collector.setup_listeners(page)
+            error_collector = ErrorContextCollector()
+            error_collector.setup_listeners(page)
 
-        click.echo("Browser ready, starting execution...")
+            click.echo("Browser ready, starting execution...")
 
-        screenshots: list[str] = []
-        failed_step: dict[str, Any] | None = None
+            screenshots: list[str] = []
+            failed_step: dict[str, Any] | None = None
 
-        for idx, step in enumerate(steps):
-            step_type = step.get("type", "unknown")
-            step_start = time.time()
-            step_num = str(idx + 1).zfill(step_width)
-            self._log(f"[{step_num}/{total_steps}] {step_type} begin")
+            for idx, step in enumerate(steps):
+                step_type = step.get("type", "unknown")
+                step_start = time.time()
+                step_num = str(idx + 1).zfill(step_width)
+                self._log(f"[{step_num}/{total_steps}] {step_type} begin")
 
-            try:
-                step_vars = step.get("variables", {})
-                merged_vars = {**global_vars, **step_vars}
-                params = substitute_vars(step, merged_vars)
+                try:
+                    step_vars = step.get("variables", {})
+                    merged_vars = {**global_vars, **step_vars}
+                    params = substitute_vars(step, merged_vars)
 
-                step_class = get_step(params["type"])
-                if step_class is None:
-                    raise ValueError(f"Unknown step type: {params['type']}")
+                    step_class = get_step(params["type"])
+                    if step_class is None:
+                        raise ValueError(f"Unknown step type: {params['type']}")
 
-                step_instance = step_class()
-                step_context = StepContext(
-                    page=page,
-                    variables=merged_vars,
-                    output_dir=output,
-                    screenshots=screenshots,
-                )
+                    step_instance = step_class()
+                    step_context = StepContext(
+                        page=page,
+                        variables=merged_vars,
+                        output_dir=output,
+                        screenshots=screenshots,
+                    )
 
-                result = await self._execute_with_retry(
-                    step_instance=step_instance,
-                    step_context=step_context,
-                    params=params,
-                    step_num=step_num,
-                    total_steps=total_steps,
-                )
+                    result = await self._execute_with_retry(
+                        step_instance=step_instance,
+                        step_context=step_context,
+                        params=params,
+                        step_num=step_num,
+                        total_steps=total_steps,
+                    )
 
-                if not result.success:
-                    raise RuntimeError(result.message)
+                    if not result.success:
+                        raise RuntimeError(result.message)
 
-                elapsed_ms = int((time.time() - step_start) * 1000)
-                self._log(f"[{step_num}/{total_steps}] {result.message} end, cost {elapsed_ms} ms")
+                    elapsed_ms = int((time.time() - step_start) * 1000)
+                    self._log(f"[{step_num}/{total_steps}] {result.message} end, cost {elapsed_ms} ms")
 
-            except Exception as e:
-                error_context = await error_collector.collect_error_context(
-                    page=page,
-                    output_dir=output,
-                    step_index=idx,
-                    step_type=step_type,
-                )
+                except Exception as e:
+                    error_context = await error_collector.collect_error_context(
+                        page=page,
+                        output_dir=output,
+                        step_index=idx,
+                        step_type=step_type,
+                    )
 
-                failed_step = {
-                    "index": idx,
-                    "type": step_type,
-                    "error": str(e),
-                    "context": error_context.to_dict(),
-                }
-
-                click.echo(f"[{step_num}/{total_steps}] {step_type} FAILED: {e}", err=True)
-
-                if error_context.screenshot_path:
-                    click.echo(f"  Screenshot saved: {error_context.screenshot_path}", err=True)
-                if error_context.html_snapshot_path:
-                    click.echo(f"  HTML snapshot saved: {error_context.html_snapshot_path}", err=True)
-                if error_context.console_errors:
-                    click.echo(f"  Console errors: {len(error_context.console_errors)}", err=True)
-                if error_context.network_errors:
-                    click.echo(f"  Network errors: {len(error_context.network_errors)}", err=True)
-                click.echo(f"  Current URL: {error_context.url}", err=True)
-
-                on_error = flow.get("on_error", "stop")
-                if on_error == "stop":
-                    click.echo("Stopping execution due to error")
-                    await context.close()
-                    return {
-                        "success": False,
-                        "flow": flow_name,
-                        "duration_ms": int((time.time() - start_time) * 1000),
-                        "screenshots": screenshots,
-                        "steps_executed": idx,
-                        "steps_total": total_steps,
-                        "failed_step": failed_step,
+                    failed_step = {
+                        "index": idx,
+                        "type": step_type,
+                        "error": str(e),
+                        "context": error_context.to_dict(),
                     }
 
-        click.echo("All steps completed successfully")
-        await context.close()
+                    click.echo(f"[{step_num}/{total_steps}] {step_type} FAILED: {e}", err=True)
 
-        return {
-            "success": True,
-            "flow": flow_name,
-            "duration_ms": int((time.time() - start_time) * 1000),
-            "screenshots": screenshots,
-            "steps_executed": total_steps,
-            "steps_total": total_steps,
-        }
+                    if error_context.screenshot_path:
+                        click.echo(f"  Screenshot saved: {error_context.screenshot_path}", err=True)
+                    if error_context.html_snapshot_path:
+                        click.echo(f"  HTML snapshot saved: {error_context.html_snapshot_path}", err=True)
+                    if error_context.console_errors:
+                        click.echo(f"  Console errors: {len(error_context.console_errors)}", err=True)
+                    if error_context.network_errors:
+                        click.echo(f"  Network errors: {len(error_context.network_errors)}", err=True)
+                    click.echo(f"  Current URL: {error_context.url}", err=True)
+
+                    on_error = flow.get("on_error", "stop")
+                    if on_error == "stop":
+                        click.echo("Stopping execution due to error")
+                        return {
+                            "success": False,
+                            "flow": flow_name,
+                            "duration_ms": int((time.time() - start_time) * 1000),
+                            "screenshots": screenshots,
+                            "steps_executed": idx,
+                            "steps_total": total_steps,
+                            "failed_step": failed_step,
+                        }
+
+            click.echo("All steps completed successfully")
+
+            return {
+                "success": True,
+                "flow": flow_name,
+                "duration_ms": int((time.time() - start_time) * 1000),
+                "screenshots": screenshots,
+                "steps_executed": total_steps,
+                "steps_total": total_steps,
+            }
+        finally:
+            await context.close()
