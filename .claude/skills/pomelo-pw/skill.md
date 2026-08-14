@@ -1,3 +1,8 @@
+---
+name: pomelo-pw
+description: Run browser automation flows using Pomelo PW through the pomelo-pw CLI.
+---
+
 # Pomelo PW Skill
 
 Run browser automation flows using Pomelo PW.
