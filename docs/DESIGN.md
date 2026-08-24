@@ -9,7 +9,7 @@ Pomelo PW 是一个基于 Playwright 的流程化 UI 自动化工具，从 typin
 - 类型安全的步骤规范与校验
 - 可扩展的步骤处理器架构
 - 灵活的变量替换系统
-- 支持 Claude Code Skill 集成
+- 支持 Claude Code、Codex 与 Grok Build 原生插件集成
 
 ---
 

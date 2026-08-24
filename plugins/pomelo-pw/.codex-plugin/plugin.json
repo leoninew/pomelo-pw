@@ -1,0 +1,14 @@
+{
+  "name": "pomelo-pw",
+  "version": "0.3.1",
+  "description": "Flow-based UI automation workflows powered by the pomelo-pw CLI.",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Pomelo PW",
+    "shortDescription": "Run Playwright browser automation flows.",
+    "longDescription": "Provides flow-based Playwright browser automation workflows through the pomelo-pw CLI.",
+    "category": "Developer Tools",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": "Use Pomelo PW to create, validate, or run a browser automation flow."
+  }
+}

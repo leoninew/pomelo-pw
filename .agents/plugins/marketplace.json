@@ -1,0 +1,12 @@
+{
+  "name": "pomelo-pw-local",
+  "plugins": [
+    {
+      "name": "pomelo-pw",
+      "source": {
+        "source": "local",
+        "path": "./plugins/pomelo-pw"
+      }
+    }
+  ]
+}
