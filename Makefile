@@ -2,49 +2,62 @@ SHELL := bash
 .SHELLFLAGS := -eu -o pipefail -c
 .DEFAULT_GOAL := help
 
-ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+UV ?= uv
+UV_RUN ?= $(UV) run
+ARGS ?=
 
-.PHONY: help install run check test build release clean
+CHECK_FIX := $(filter 1 true yes,$(fix))
+COVER_ENABLED := $(filter 1 true yes,$(cov))
+RUFF_FORMAT_ARGS := --check
+RUFF_CHECK_ARGS :=
+COVER_ARGS :=
 
-help:
-	@printf "Available targets:\n"
-	@printf "  install  Install development dependencies\n"
-	@printf "  run      Run pomelo-pw CLI, optionally with ARGS='...'\n"
-	@printf "  check    Run ruff and mypy checks\n"
-	@printf "  test     Run pytest\n"
-	@printf "  build    Build package distributions\n"
-	@printf "  release  Preflight, editable-install, and publish the native plugin\n"
-	@printf "  clean    Remove local build and cache artifacts\n"
+ifneq ($(CHECK_FIX),)
+RUFF_FORMAT_ARGS :=
+RUFF_CHECK_ARGS := --fix
+endif
 
-install:
-	uv sync --group dev
+ifneq ($(COVER_ENABLED),)
+COVER_ARGS := --cov=src/pomelo_pw --cov-report=term-missing --cov-report=html
+endif
 
-run:
-	uv run pomelo-pw $(ARGS)
+.PHONY: help deps install check test release clean run
 
-check:
-	uv run ruff check --fix src tests
-	uv run ruff format src tests
-	uv run mypy src
+help: ## Show available workflow targets.
+	@printf "Usage: make <target> [fix=1] [cov=1]\n"
+	@printf "\nTargets:\n"
+	@printf "  deps      Sync locked development dependencies\n"
+	@printf "  install   Install the CLI and synchronize the local plugin\n"
+	@printf "  check     Check format, lint, and types [fix=1]\n"
+	@printf "  test      Run unit tests [cov=1]\n"
+	@printf "  release   Build source and wheel distributions\n"
+	@printf "  run       Run pomelo-pw from the source tree [ARGS='...']\n"
+	@printf "  clean     Remove local build and cache artifacts\n"
 
-test:
-	uv run pytest
+deps: ## Sync locked development dependencies without installing the project.
+	$(UV) sync --all-groups --locked --no-install-project
 
-build:
-	uv build
+install: ## Install the CLI and synchronize the local plugin.
+	$(UV) run python scripts/release.py plugin check
+	$(UV) tool install --editable . --force
+	$(UV) run python scripts/release.py plugin apply
 
-release:
-	python scripts/release.py plugin check
-	python -m pip install -e .
-	python scripts/release.py plugin apply
+check: ## Check format, lint, and types; use fix=1 to apply fixes.
+	$(UV_RUN) ruff format $(RUFF_FORMAT_ARGS) src tests
+	$(UV_RUN) ruff check $(RUFF_CHECK_ARGS) src tests
+	$(UV_RUN) mypy src
 
-clean:
-	find . -type d -name "__pycache__" -not -path "./.git/*" -exec rm -rf {} +
-	find . -type d -name ".mypy_cache" -not -path "./.git/*" -exec rm -rf {} +
-	find . -type d -name ".ruff_cache" -not -path "./.git/*" -exec rm -rf {} +
-	rm -rf dist output
-	find . -type d -name "*.egg-info" -exec rm -rf {} +
+test: ## Run unit tests; use cov=1 to collect coverage.
+	$(UV_RUN) pytest $(COVER_ARGS) tests
+
+release: ## Build source and wheel distributions.
+	$(UV) build
+
+run: ## Run pomelo-pw from the source tree.
+	$(UV_RUN) pomelo-pw $(ARGS)
+
+clean: ## Remove explicitly listed local build and cache artifacts.
+	rm -rf dist output .pytest_cache .mypy_cache .ruff_cache htmlcov coverage
 	rm -f .coverage
-
-%:
-	@:
+	find . -type d -name "__pycache__" -not -path "./.git/*" -exec rm -rf {} +
+	find . -type d -name "*.egg-info" -not -path "./.git/*" -exec rm -rf {} +
