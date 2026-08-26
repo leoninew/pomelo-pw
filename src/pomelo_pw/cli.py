@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import click
+from playwright._impl._driver import compute_driver_executable, get_driver_env
 
 from pomelo_pw.executor import FlowExecutor
 from pomelo_pw.steps import get_step, list_steps
@@ -109,9 +110,11 @@ def install() -> None:
     """Install Playwright browser (chromium)."""
     click.echo("Installing Playwright chromium browser...")
     try:
+        driver_executable, driver_cli = compute_driver_executable()
         subprocess.run(
-            [sys.executable, "-m", "playwright", "install", "chromium"],
+            [driver_executable, driver_cli, "install", "chromium"],
             check=True,
+            env=get_driver_env(),
         )
         click.echo("Installation completed successfully")
     except subprocess.CalledProcessError as e:
@@ -206,4 +209,6 @@ def record(url: str, output: str, headless: bool) -> None:
 
 
 if __name__ == "__main__":
-    cli()
+    from pomelo_pw.__main__ import main
+
+    main()

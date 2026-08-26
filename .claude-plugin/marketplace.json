@@ -1,5 +1,8 @@
 {
   "name": "pomelo-pw-local",
+  "owner": {
+    "name": "Pomelo PW contributors"
+  },
   "plugins": [
     {
       "name": "pomelo-pw",

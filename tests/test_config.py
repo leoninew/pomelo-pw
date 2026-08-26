@@ -1,5 +1,6 @@
 """Tests for configuration module."""
 
+import pomelo_pw.config.settings as settings
 from pomelo_pw.config import (
     ConfigContainer,
     PlaywrightConfig,
@@ -72,3 +73,13 @@ class TestLoadAppConfig:
         """Test that it has playwright config."""
         config = load_app_config()
         assert isinstance(config.playwright, PlaywrightConfig)
+
+    def test_uses_system_chrome_in_frozen_binary(self, monkeypatch) -> None:
+        """Frozen executables use an installed Chrome instead of Playwright's browser cache."""
+        monkeypatch.setattr(settings.sys, "frozen", True, raising=False)
+        monkeypatch.setattr(settings, "_find_chrome_executable", lambda: "/usr/bin/google-chrome")
+
+        config = load_app_config()
+
+        assert config.playwright.executable_path == "/usr/bin/google-chrome"
+        assert settings.DEFAULT_CONFIG["playwright"]["executable_path"] is None

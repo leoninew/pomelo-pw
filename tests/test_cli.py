@@ -29,3 +29,21 @@ class TestBrowserCommands:
 
         assert result.exit_code == 0
         record_flow.assert_awaited_once_with("https://example.com", "recorded.yaml", headless=False)
+
+    def test_install_uses_playwright_driver(self) -> None:
+        """The install command works both from source and a frozen executable."""
+        runner = CliRunner()
+
+        with (
+            patch("pomelo_pw.cli.compute_driver_executable", return_value=("node", "cli.js")),
+            patch("pomelo_pw.cli.get_driver_env", return_value={}),
+            patch("pomelo_pw.cli.subprocess.run") as run,
+        ):
+            result = runner.invoke(cli, ["install"])
+
+        assert result.exit_code == 0
+        run.assert_called_once_with(
+            ["node", "cli.js", "install", "chromium"],
+            check=True,
+            env={},
+        )

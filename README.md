@@ -649,12 +649,27 @@ make test
 make check
 
 # Run example flow
-make run ARGS="run flows/example.yaml"
+uv run pomelo-pw run flows/example.yaml
+
+# Build a standalone executable in dist/
+make binary
 ```
 
 ### Development Mode
 
 When running from source, Pomelo PW automatically detects development mode and uses your system Chrome instead of downloading Playwright's Chromium. This significantly speeds up the setup process.
+
+### Standalone Binary
+
+`make binary` produces a platform-specific executable in `dist/`. It bundles the Python application and Playwright runtime, but not a browser. It uses an installed Chrome or Chromium when available; otherwise, run its `install` command to download Playwright Chromium to the user's browser cache. Build it on each target operating system and architecture, then run it from the directory containing your flow files:
+
+```bash
+# Windows
+.\dist\pomelo-pw.exe run flow.yaml
+
+# macOS or Linux
+./dist/pomelo-pw run flow.yaml
+```
 
 ## Project Structure
 

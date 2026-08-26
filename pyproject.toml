@@ -16,7 +16,7 @@ visual = [
 ]
 
 [project.scripts]
-pomelo-pw = "pomelo_pw.cli:cli"
+pomelo-pw = "pomelo_pw.__main__:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -30,6 +30,7 @@ include = ["src/pomelo_pw"]
 
 [dependency-groups]
 dev = [
+    "pyinstaller>=6.18.0",
     "ruff>=0.15.17",
     "mypy>=2.1.0",
     "pytest>=9.0.2",

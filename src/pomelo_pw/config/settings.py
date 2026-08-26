@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 import platform
+import sys
+from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -96,8 +98,11 @@ def _find_chrome_executable() -> str | None:
     return None
 
 
-def _is_dev_mode() -> bool:
-    """Check if running in development mode (from source)."""
+def _uses_system_chrome() -> bool:
+    """Check whether source or frozen-binary execution should use system Chrome."""
+    if getattr(sys, "frozen", False):
+        return True
+
     # Check if running from source by looking for pyproject.toml in parent directories
     current = Path(__file__).resolve()
     return any((parent / "pyproject.toml").exists() for parent in current.parents)
@@ -106,14 +111,14 @@ def _is_dev_mode() -> bool:
 def load_app_config() -> ConfigContainer:
     """Load tool configuration.
 
-    Automatically uses system Chrome if running in development mode.
+    Automatically uses system Chrome when running from source or a packaged binary.
 
     Returns:
         ConfigContainer with loaded configuration.
     """
-    config = DEFAULT_CONFIG.copy()
+    config = deepcopy(DEFAULT_CONFIG)
 
-    if _is_dev_mode():
+    if _uses_system_chrome():
         chrome_path = _find_chrome_executable()
         if chrome_path:
             config["playwright"]["executable_path"] = chrome_path
