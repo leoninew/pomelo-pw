@@ -4,6 +4,7 @@ SHELL := bash
 
 UV ?= uv
 UV_RUN ?= $(UV) run --locked --no-sync
+VERSION_ARGS ?=
 
 CHECK_FIX := $(filter 1 true yes,$(fix))
 COVER_ENABLED := $(filter 1 true yes,$(cov))
@@ -20,7 +21,7 @@ ifneq ($(COVER_ENABLED),)
 COVER_ARGS := --cov=src/pomelo_pw --cov-report=term-missing --cov-report=html
 endif
 
-.PHONY: help deps install check test release binary clean
+.PHONY: help deps install check test version release binary clean
 
 help: ## Show available workflow targets.
 	@printf "Usage: make <target> [fix=1] [cov=1]\n"
@@ -29,6 +30,7 @@ help: ## Show available workflow targets.
 	@printf "  install   Install the CLI and synchronize the local plugin\n"
 	@printf "  check     Check format, lint, and types [fix=1]\n"
 	@printf "  test      Run unit tests [cov=1]\n"
+	@printf "  version   Calculate version [VERSION_ARGS='--quiet --apply']\n"
 	@printf "  release   Build source and wheel distributions\n"
 	@printf "  binary    Build a standalone pomelo-pw executable\n"
 	@printf "  clean     Remove local build and cache artifacts\n"
@@ -48,6 +50,9 @@ check: ## Check format, lint, and types; use fix=1 to apply fixes.
 
 test: ## Run unit tests; use cov=1 to collect coverage.
 	$(UV_RUN) pytest $(COVER_ARGS) tests
+
+version: ## Calculate or apply the Git-derived project version.
+	$(UV_RUN) python scripts/version_calc.py $(VERSION_ARGS)
 
 release: ## Build source and wheel distributions.
 	$(UV) build

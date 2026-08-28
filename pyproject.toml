@@ -3,7 +3,7 @@ name = "pomelo-pw"
 version = "0.3.1"
 description = "Flow-based UI automation tool powered by Playwright"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "playwright>=1.40.0",
     "click>=8.0.0",
@@ -40,14 +40,14 @@ dev = [
 ]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
 
 [tool.ruff]
 line-length = 120
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]

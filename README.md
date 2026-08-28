@@ -648,6 +648,9 @@ make test
 # Run code quality checks (format + lint + type check)
 make check
 
+# Show the version calculated from Git history
+make version
+
 # Run example flow
 uv run pomelo-pw run flows/example.yaml
 
@@ -670,6 +673,21 @@ When running from source, Pomelo PW automatically detects development mode and u
 # macOS or Linux
 ./dist/pomelo-pw run flow.yaml
 ```
+
+### Release Version
+
+Pomelo PW derives its `0.y.z` release version from the complete Git history: a
+commit subject beginning with `feat` advances `y` and resets `z`; every other
+commit advances `z`. To apply the calculated version to the Python package
+metadata and refresh its lock file:
+
+```bash
+make version VERSION_ARGS='--quiet --apply'
+```
+
+Create the corresponding `vX.Y.Z` tag after reviewing and committing the
+updated `pyproject.toml` and `uv.lock`. The GitHub Release workflow validates
+that tag, the project version, and the built wheel all agree.
 
 ## Project Structure
 
