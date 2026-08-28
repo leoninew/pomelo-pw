@@ -1,6 +1,6 @@
 """Tests for shared Playwright browser setup."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -70,9 +70,15 @@ class TestBrowserLifecycle:
         context = MagicMock()
         context.close = AsyncMock()
         context.new_page = AsyncMock(side_effect=RuntimeError("page setup failed"))
-        executor.browser_lifecycle.new_context = AsyncMock(return_value=context)
 
-        with pytest.raises(RuntimeError, match="page setup failed"):
+        with (
+            patch.object(
+                executor.browser_lifecycle,
+                "new_context",
+                new=AsyncMock(return_value=context),
+            ),
+            pytest.raises(RuntimeError, match="page setup failed"),
+        ):
             await executor._run_once(
                 browser=browser,
                 flow={"name": "test"},

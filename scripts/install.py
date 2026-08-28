@@ -164,20 +164,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.asset == "plugin":
             if not config.plugins:
                 raise SyncError("project release configuration does not define plugin")
-            target_config: PluginConfig | SkillConfig = config.plugins[0]
-        else:
-            target_config = config.skill
-        if target_config is None:
-            raise SyncError(f"project release configuration does not define {args.asset}")
-        if args.asset == "skill" and not SAFE_SKILL_NAME.fullmatch(target_config.name):
-            raise SyncError("standalone skill name can only contain letters, digits, underscores, and hyphens")
-        requested, explicit = requested_clients(args)
-        targets, selection = select_targets(target_config, requested, explicit, args.strict)
-        outcomes.extend(selection)
-        if args.asset == "plugin":
+            plugin_config = config.plugins[0]
+            requested, explicit = requested_clients(args)
+            targets, selection = select_targets(plugin_config, requested, explicit, args.strict)
+            outcomes.extend(selection)
             exit_code = manage_plugin(config.plugins, args.command, targets, args.dry_run, outcomes)
         else:
-            exit_code = manage_skill(target_config, args.command, targets, args.dry_run, outcomes)
+            skill_config = config.skill
+            if skill_config is None:
+                raise SyncError(f"project release configuration does not define {args.asset}")
+            if not SAFE_SKILL_NAME.fullmatch(skill_config.name):
+                raise SyncError("standalone skill name can only contain letters, digits, underscores, and hyphens")
+            requested, explicit = requested_clients(args)
+            targets, selection = select_targets(skill_config, requested, explicit, args.strict)
+            outcomes.extend(selection)
+            exit_code = manage_skill(skill_config, args.command, targets, args.dry_run, outcomes)
     except SyncError as error:
         logging.exception("sync failed asset=%s command=%s", args.asset, args.command)
         outcomes.append(Outcome("global", "failed", str(error)))
@@ -305,8 +306,8 @@ def manage_plugin(
 
     failed = False
     for target_index, target in enumerate(targets):
-        for config, plans in plans_by_plugin:
-            plan = plans[target_index]
+        for config, configured_plans in plans_by_plugin:
+            plan = configured_plans[target_index]
             if command == "check":
                 logging.info(
                     "client=%s plugin=%s action=%s",
@@ -480,6 +481,7 @@ def plan_codex(config: PluginConfig, target: ClientTarget, runner: CommandRunner
 def plan_grok(config: PluginConfig, target: ClientTarget, runner: CommandRunner) -> ClientPlan:
     installed = records(runner.inspect(target, ("plugin", "list", "--json")), "plugins")
     installed_plugin = exact_record(installed, "name", config.plugin_name)
+    commands: tuple[Command, ...]
     if installed_plugin is None:
         commands = (
             Command(
