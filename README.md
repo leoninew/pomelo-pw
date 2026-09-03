@@ -682,7 +682,7 @@ commit advances `z`. To apply the calculated version to the Python package
 metadata and refresh its lock file:
 
 ```bash
-make version VERSION_ARGS='--quiet --apply'
+make version apply=1
 ```
 
 Create the corresponding `vX.Y.Z` tag after reviewing and committing the

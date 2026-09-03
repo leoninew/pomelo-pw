@@ -41,16 +41,28 @@ dev = [
 
 [tool.mypy]
 python_version = "3.12"
+files = ["src", "tests", "scripts"]
+mypy_path = "src"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
+warn_unreachable = true
+pretty = true
 
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+exclude = ["scripts/install.py"]
+force-exclude = true
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

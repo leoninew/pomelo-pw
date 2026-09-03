@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Derive the project version from Git history and optionally apply it.
+"""Derive the project version from Git history without applying it by default.
 
 Rules (x is fixed at 0):
   * y, z start at 0
   * a commit whose subject starts with "feat"  -> y += 1, z = 0
   * any other commit                           -> z += 1
 
-``--apply`` writes the resulting version to the static ``[project].version``
+``--no-dry-run`` writes the resulting version to the static ``[project].version``
 field in ``pyproject.toml`` and refreshes ``uv.lock``.
 
 Usage:
 
     uv run --locked --no-sync python scripts/version_calc.py
-    uv run --locked --no-sync python scripts/version_calc.py --quiet --apply
+    uv run --locked --no-sync python scripts/version_calc.py --quiet --no-dry-run
 """
 
 from __future__ import annotations
@@ -149,7 +149,12 @@ def apply_version(version: str) -> None:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description="Derive the Pomelo PW version from Git history")
-    parser.add_argument("--apply", action="store_true", help="write pyproject.toml and refresh uv.lock")
+    parser.add_argument(
+        "--no-dry-run",
+        dest="dry_run",
+        action="store_false",
+        help="write pyproject.toml and refresh uv.lock",
+    )
     parser.add_argument("--quiet", action="store_true", help="do not print per-commit history lines")
     return parser.parse_args(argv)
 
@@ -161,7 +166,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.quiet:
         print()
     print(f"version: {version}")
-    if args.apply:
+    if not args.dry_run:
         apply_version(version)
     return 0
 

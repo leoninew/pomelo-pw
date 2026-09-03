@@ -41,7 +41,6 @@ Review status: Accepted
 - [x] `check` 默认只读，`fix=1` 才展开 Ruff 修复参数。
 - [x] `test` 默认保持 134 个测试范围，`cov=1` 仅增加覆盖率输出。
 - [x] `release` 仅构建 source distribution 和 wheel，不上传、不发布、不修改版本或用户目录。
-- [x] `clean` 仅清理明确列出的构建产物、缓存、覆盖率报告和 egg-info 目录。
 
 ## Test results
 

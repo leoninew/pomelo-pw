@@ -32,6 +32,20 @@ def test_calculate_version_resets_patch_for_feature_commits(monkeypatch: pytest.
     assert version_calc.calculate_version(print_history=False) == "0.2.0"
 
 
+def test_main_only_applies_version_with_no_dry_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The default is a dry run; metadata changes require the explicit flag."""
+    applied: list[str] = []
+
+    monkeypatch.setattr(version_calc, "calculate_version", lambda **_: "0.2.0")
+    monkeypatch.setattr(version_calc, "apply_version", applied.append)
+
+    assert version_calc.main(["--quiet"]) == 0
+    assert applied == []
+
+    assert version_calc.main(["--quiet", "--no-dry-run"]) == 0
+    assert applied == ["0.2.0"]
+
+
 def test_prepare_project_version_update_only_changes_project_version(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
