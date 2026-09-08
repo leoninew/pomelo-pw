@@ -651,6 +651,10 @@ make check
 # Show the version calculated from Git history
 make version
 
+# Build distributions, then upload the pyproject.toml version to PyPI
+make release
+make pypi
+
 # Run example flow
 uv run pomelo-pw run flows/example.yaml
 

@@ -19,7 +19,7 @@ ifneq ($(filter 1 true yes,$(cov)),)
 TEST_COV_ARGS := --cov=src/pomelo_pw --cov-report=term-missing --cov-report=html
 endif
 
-.PHONY: help deps install check test version release binary
+.PHONY: help deps install check test version release pypi binary
 
 help: ## Show available workflow targets.
 	@printf "Usage: make <target> [fix=1] [cov=1]\n"
@@ -30,6 +30,7 @@ help: ## Show available workflow targets.
 	@printf "  test      Run unit tests [cov=1]\n"
 	@printf "  version   Calculate the Git-derived version [apply=1]\n"
 	@printf "  release   Build source and wheel distributions\n"
+	@printf "  pypi      Upload the pyproject.toml version's dist artifacts to PyPI\n"
 	@printf "  binary    Build a standalone pomelo-pw executable\n"
 
 deps: ## Sync locked development dependencies and install the project.
@@ -57,6 +58,18 @@ endif
 
 release: ## Build source and wheel distributions.
 	$(UV) build
+
+# version_calc.py writes [project].version; uv version reads that same field.
+VERSION = $(shell $(UV) version --short)
+DIST_NAME = $(subst -,_,pomelo-pw)
+
+pypi: ## Upload the current package version's sdist and wheel to PyPI.
+	$(if $(VERSION),,$(error could not read [project].version from pyproject.toml))
+	$(if $(wildcard dist/$(DIST_NAME)-$(VERSION).tar.gz),,$(error Missing dist/$(DIST_NAME)-$(VERSION).tar.gz))
+	$(if $(wildcard dist/$(DIST_NAME)-$(VERSION)-py3-none-any.whl),,$(error Missing dist/$(DIST_NAME)-$(VERSION)-py3-none-any.whl))
+	$(UV) tool run --env-file .env twine upload --non-interactive \
+		"dist/$(DIST_NAME)-$(VERSION).tar.gz" \
+		"dist/$(DIST_NAME)-$(VERSION)-py3-none-any.whl"
 
 binary: ## Build a standalone executable that uses a system Chrome installation.
 	$(UV_RUN) pyinstaller --noconfirm --clean --onefile --name pomelo-pw --paths src --workpath build/pyinstaller --specpath build/pyinstaller --collect-all playwright --copy-metadata pomelo-pw src/pomelo_pw/__main__.py

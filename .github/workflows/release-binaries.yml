@@ -1,3 +1,18 @@
+# Build standalone pomelo-pw binaries after the wheel release workflow succeeds.
+#
+# Trigger:
+#   - successful Release wheel run for a version tag
+#   - workflow_dispatch (manual rebuild for a tag)
+#
+# PyInstaller flags live in Makefile `binary`. This workflow runs that target on
+# each native runner, then attaches platform-named assets.
+#
+# Artifacts are uploaded onto the release as:
+#   pomelo-pw-linux-x86_64
+#   pomelo-pw-macos-arm64
+#   pomelo-pw-macos-x86_64
+#   pomelo-pw-windows-x86_64.exe
+
 name: Release binaries
 
 on:
@@ -7,7 +22,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing GitHub Release tag to attach binaries to
+        description: "Release tag to attach binaries to (e.g. v0.15.2)"
         required: true
         type: string
 
@@ -16,38 +31,40 @@ permissions:
 
 concurrency:
   group: release-binaries-${{ github.event.workflow_run.head_branch || inputs.tag }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
-    name: Build ${{ matrix.target }} executable
+    name: Build (${{ matrix.artifact }})
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
       startsWith(github.event.workflow_run.head_branch, 'v'))
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ matrix.os }}
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.workflow_run.head_branch }}
+      GH_TOKEN: ${{ github.token }}
       EXPECTED_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || '' }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - runner: ubuntu-latest
-            target: linux-x86_64
-            suffix: ""
-          - runner: windows-latest
-            target: windows-x86_64
-            suffix: ".exe"
-          - runner: macos-13
-            target: macos-x86_64
-            suffix: ""
-          - runner: macos-14
-            target: macos-arm64
-            suffix: ""
+          - os: ubuntu-22.04
+            artifact: pomelo-pw-linux-x86_64
+            ext: ""
+          - os: macos-14
+            artifact: pomelo-pw-macos-arm64
+            ext: ""
+          - os: macos-15-intel
+            artifact: pomelo-pw-macos-x86_64
+            ext: ""
+          - os: windows-2022
+            artifact: pomelo-pw-windows-x86_64
+            ext: ".exe"
 
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ env.RELEASE_TAG }}
           fetch-depth: 0
@@ -62,47 +79,66 @@ jobs:
             test "$EXPECTED_SHA" = "$(git rev-parse HEAD)"
           fi
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
 
-      - uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
         with:
           enable-cache: true
 
-      - name: Install locked dependencies
+      - name: Install GNU Make
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install make --yes --no-progress
+
+      - name: Sync project
+        shell: bash
         run: make deps
 
-      - name: Build executable
+      - name: Build binary
+        shell: bash
         run: make binary
 
-      - name: Smoke test executable
+      - name: Stage binary
         shell: bash
-        env:
-          BINARY_SUFFIX: ${{ matrix.suffix }}
-        run: ./dist/pomelo-pw${BINARY_SUFFIX} --help >/dev/null
-
-      - name: Prepare release asset
-        shell: bash
-        env:
-          BINARY_SUFFIX: ${{ matrix.suffix }}
-          TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
-          mkdir release-assets
-          cp "./dist/pomelo-pw${BINARY_SUFFIX}" "./release-assets/pomelo-pw-${TARGET}${BINARY_SUFFIX}"
+          mkdir -p dist/release
+          src="dist/pomelo-pw${{ matrix.ext }}"
+          dst="dist/release/${{ matrix.artifact }}${{ matrix.ext }}"
+          if [[ ! -f "${src}" ]]; then
+            echo "Expected binary missing: ${src}" >&2
+            ls -la dist || true
+            exit 1
+          fi
+          cp "${src}" "${dst}"
+          if [[ "${{ runner.os }}" != "Windows" ]]; then
+            chmod +x "${dst}"
+          fi
+          ls -lh "${dst}"
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - name: Smoke test binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="dist/release/${{ matrix.artifact }}${{ matrix.ext }}"
+          "${bin}" --help | head -20
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: binary-${{ matrix.target }}
-          path: release-assets/*
+          name: ${{ matrix.artifact }}
+          path: dist/release/${{ matrix.artifact }}${{ matrix.ext }}
           if-no-files-found: error
           retention-days: 14
 
   publish:
-    name: Attach binaries to Release
+    name: Attach binaries to release
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     permissions:
       contents: write
     env:
@@ -110,19 +146,27 @@ jobs:
       GH_TOKEN: ${{ github.token }}
 
     steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - name: Download all binaries
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          pattern: binary-*
-          path: release-assets
+          path: artifacts
           merge-multiple: true
 
-      - name: Generate checksums
+      - name: List artifacts
+        shell: bash
+        run: ls -lah artifacts
+
+      - name: Verify GitHub Release exists
+        shell: bash
+        run: gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"
+
+      - name: Upload assets to GitHub Release
         shell: bash
         run: |
           set -euo pipefail
-          cd release-assets
-          sha256sum ./* > SHA256SUMS
-
-      - name: Upload binaries to GitHub Release
-        shell: bash
-        run: gh release upload "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --clobber
+          gh release upload "$RELEASE_TAG" \
+            artifacts/pomelo-pw-linux-x86_64 \
+            artifacts/pomelo-pw-macos-arm64 \
+            artifacts/pomelo-pw-macos-x86_64 \
+            artifacts/pomelo-pw-windows-x86_64.exe \
+            --repo "$GITHUB_REPOSITORY" --clobber
