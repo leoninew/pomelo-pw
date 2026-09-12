@@ -77,7 +77,7 @@ Screenshots save to `./<flow-name>/` by default (derived from filename).
 | `wait` | - | Wait for conditions |
 | `scroll` | `direction`, `distance` | Scroll page |
 | `hover` | `selector` | Hover over element |
-| `select` | `selector`, `value` | Select dropdown option |
+| `select` | `selector`, one of `value` / `label` | Select dropdown option |
 | `check` / `uncheck` | `selector` | Toggle checkbox |
 | `evaluate` | `script` | Execute JavaScript |
 | `set-viewport` | `width`, `height` | Set viewport size |
@@ -87,6 +87,25 @@ Screenshots save to `./<flow-name>/` by default (derived from filename).
 | `loop` | `steps`, `times`/`while` | Loop execution |
 
 ## Step Details
+
+### select - Dropdown Options
+
+Provide `selector` and exactly one option selector:
+
+- `value`: the option's HTML `value` attribute
+- `label`: the option's exact visible text
+
+```yaml
+# Prefer a stable option value when available
+- type: select
+  selector: "#country"
+  value: "cn"
+
+# Use the text shown to the user when no stable value is available
+- type: select
+  selector: "#country"
+  label: "China"
+```
 
 ### wait — Enhanced SPA Support
 

@@ -129,11 +129,13 @@ CLI 参数 > 步骤级变量 > 流程级变量
 | `wait` | - | 等待条件 |
 | `scroll` | - | 滚动页面 |
 | `hover` | `selector` | 悬停 |
-| `select` | `selector`, `value` | 选择下拉选项 |
+| `select` | `selector`，`value` 或 `label` 二选一 | 按 HTML value 或可见文本选择下拉选项 |
 | `check` | `selector` | 勾选复选框 |
 | `uncheck` | `selector` | 取消勾选 |
 | `evaluate` | `script` | 执行 JavaScript |
 | `set-viewport` | - | 设置视口 |
+
+`select` 的 `value` 对应 option 的 HTML `value` 属性；`label` 对应用户可见的精确选项文本。两者必须且只能提供一个。
 
 ---
 

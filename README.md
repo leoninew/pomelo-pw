@@ -187,7 +187,7 @@ pomelo-pw spec navigate
 | `wait` | - | Wait for conditions (selector, URL, network idle, animations, etc.) |
 | `scroll` | - | Scroll the page |
 | `hover` | `selector` | Hover over an element |
-| `select` | `selector`, `value` | Select dropdown option |
+| `select` | `selector`, one of `value` / `label` | Select dropdown option |
 | `check` | `selector` | Check a checkbox |
 | `uncheck` | `selector` | Uncheck a checkbox |
 | `evaluate` | `script` | Execute JavaScript |
@@ -196,6 +196,25 @@ pomelo-pw spec navigate
 | `load-state` | `file` | Load browser state from file |
 
 Run `pomelo-pw spec <step>` for detailed parameter information.
+
+### Select Dropdown Options
+
+The `select` step requires a `selector` and exactly one option selector:
+
+- `value`: the option's HTML `value` attribute
+- `label`: the option's exact visible text
+
+```yaml
+# Select by the stable HTML value
+- type: select
+  selector: "#country"
+  value: "cn"
+
+# Or select by the text shown to the user
+- type: select
+  selector: "#country"
+  label: "China"
+```
 
 ### Enhanced Wait Step
 
@@ -543,7 +562,7 @@ steps:
 | `wait` | - | Wait for conditions (selector, url, timeout) |
 | `scroll` | - | Scroll the page |
 | `hover` | `selector` | Hover over an element |
-| `select` | `selector`, `value` | Select dropdown option |
+| `select` | `selector`, one of `value` / `label` | Select dropdown option |
 | `check` | `selector` | Check a checkbox |
 | `uncheck` | `selector` | Uncheck a checkbox |
 | `evaluate` | `script` | Execute JavaScript |

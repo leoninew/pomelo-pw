@@ -13,6 +13,7 @@ from pomelo_pw.steps.evaluate import EvaluateStep
 from pomelo_pw.steps.fill import FillStep
 from pomelo_pw.steps.navigate import NavigateStep
 from pomelo_pw.steps.screenshot import ScreenshotStep
+from pomelo_pw.steps.select import SelectStep
 from pomelo_pw.steps.wait import WaitStep
 
 
@@ -167,6 +168,28 @@ class TestClickStepExecution:
         assert result.success
         page.click.assert_awaited_once()
         page.wait_for_load_state.assert_awaited_once_with("networkidle", timeout=30000)
+
+
+class TestSelectStep:
+    """Tests for selecting options by stable values or visible labels."""
+
+    def test_validate_requires_exactly_one_option_selector(self) -> None:
+        assert "Provide exactly one of: value, label" in SelectStep.validate_params({"selector": "#kind"})
+        assert "Provide exactly one of: value, label" in SelectStep.validate_params(
+            {"selector": "#kind", "value": "book", "label": "教材"},
+        )
+        assert SelectStep.validate_params({"selector": "#kind", "label": "教材"}) == []
+
+    @pytest.mark.asyncio
+    async def test_selects_an_option_by_visible_label(self) -> None:
+        page = MagicMock()
+        page.select_option = AsyncMock()
+        context = StepContext(page=page, variables={}, output_dir=Path("/tmp"), screenshots=[])
+
+        result = await SelectStep().execute(context, {"selector": "#kind", "label": "教材"})
+
+        assert result.success
+        page.select_option.assert_awaited_once_with("#kind", label="教材", timeout=30000)
 
 
 class TestEvaluateStepExecution:
