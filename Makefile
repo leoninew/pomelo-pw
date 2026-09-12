@@ -62,12 +62,14 @@ release: ## Build source and wheel distributions.
 # version_calc.py writes [project].version; uv version reads that same field.
 VERSION = $(shell $(UV) version --short)
 DIST_NAME = $(subst -,_,pomelo-pw)
+PYPI_ENV_FILE ?= .env
+PYPI_ENV_ARGS := $(if $(wildcard $(PYPI_ENV_FILE)),--env-file $(PYPI_ENV_FILE))
 
 pypi: ## Upload the current package version's sdist and wheel to PyPI.
 	$(if $(VERSION),,$(error could not read [project].version from pyproject.toml))
 	$(if $(wildcard dist/$(DIST_NAME)-$(VERSION).tar.gz),,$(error Missing dist/$(DIST_NAME)-$(VERSION).tar.gz))
 	$(if $(wildcard dist/$(DIST_NAME)-$(VERSION)-py3-none-any.whl),,$(error Missing dist/$(DIST_NAME)-$(VERSION)-py3-none-any.whl))
-	$(UV) tool run --env-file .env twine upload --non-interactive \
+	$(UV) tool run $(PYPI_ENV_ARGS) twine upload --non-interactive \
 		"dist/$(DIST_NAME)-$(VERSION).tar.gz" \
 		"dist/$(DIST_NAME)-$(VERSION)-py3-none-any.whl"
 
