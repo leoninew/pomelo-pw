@@ -51,8 +51,10 @@ Create `smoke.yaml`:
 
 ```yaml
 name: example-smoke
+output_dir: ".pomelo-pw/artifacts/smoke-{{run_id}}"
 variables:
   base_url: "https://example.com"
+  run_id: "local"
 
 steps:
   - type: navigate
@@ -73,7 +75,7 @@ uvx pomelo-pw validate smoke.yaml
 uvx pomelo-pw run smoke.yaml --headless
 ```
 
-Screenshots and failure artifacts are written to `./smoke/` by default. Use `-o <directory>` to choose another output directory.
+Screenshots and failure artifacts are written to `./smoke/` by default. A flow can set a top-level `output_dir`, including `{{variable}}` references; relative paths are resolved from the command working directory. Use `-o <directory>` to override the flow setting for one run.
 
 ## Use Pomelo PW
 
@@ -100,6 +102,9 @@ pomelo-pw run flow.yaml --headless --json
 
 # Override a flow variable for this run
 pomelo-pw run flow.yaml --var base_url=https://staging.example.com
+
+# Override the flow output_dir for this run
+pomelo-pw run flow.yaml -o .pomelo-pw/artifacts/manual-run
 
 # Validate YAML and step parameters without launching a browser
 pomelo-pw validate flow.yaml

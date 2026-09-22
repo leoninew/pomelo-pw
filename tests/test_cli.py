@@ -1,5 +1,6 @@
 """Tests for browser command dispatch."""
 
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from click.testing import CliRunner
@@ -47,3 +48,37 @@ class TestBrowserCommands:
             check=True,
             env={},
         )
+
+
+class TestRunCommand:
+    """Tests for output directory dispatch."""
+
+    def test_run_leaves_output_unset_for_flow_configuration(self) -> None:
+        """Flow output_dir remains available when the CLI option is omitted."""
+        runner = CliRunner()
+
+        with runner.isolated_filesystem():
+            Path("sample.yaml").write_text("steps: []\n", encoding="utf-8")
+            with patch("pomelo_pw.cli.FlowExecutor") as executor_class:
+                executor_class.return_value.run_flow = AsyncMock(
+                    return_value={"success": True, "steps_executed": 0, "screenshots": []}
+                )
+                result = runner.invoke(cli, ["run", "sample.yaml"])
+
+        assert result.exit_code == 0
+        assert executor_class.return_value.run_flow.call_args.kwargs["output_dir"] is None
+
+    def test_run_passes_explicit_output_as_cli_override(self) -> None:
+        """An explicit CLI output directory takes precedence over flow configuration."""
+        runner = CliRunner()
+
+        with runner.isolated_filesystem():
+            Path("sample.yaml").write_text("steps: []\n", encoding="utf-8")
+            with patch("pomelo_pw.cli.FlowExecutor") as executor_class:
+                executor_class.return_value.run_flow = AsyncMock(
+                    return_value={"success": True, "steps_executed": 0, "screenshots": []}
+                )
+                result = runner.invoke(cli, ["run", "sample.yaml", "-o", "artifacts"])
+
+        assert result.exit_code == 0
+        assert executor_class.return_value.run_flow.call_args.kwargs["output_dir"] == Path("artifacts")

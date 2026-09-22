@@ -63,6 +63,12 @@ class TestFlowExecutorValidation:
         errors = executor.validate_flow(flow)
         assert len(errors) == 0
 
+    @pytest.mark.parametrize("output_dir", [None, 42, [], "   "])
+    def test_validate_flow_rejects_invalid_output_dir(self, executor: FlowExecutor, output_dir: object) -> None:
+        """Test validation rejects absent, non-string, and blank output directories."""
+        errors = executor.validate_flow({"output_dir": output_dir, "steps": []})
+        assert errors == ["Flow field 'output_dir' must be a non-empty string"]
+
     def test_validate_flow_with_variables_field(self, executor: FlowExecutor) -> None:
         """Test validation allows variables field in steps."""
         flow = {
@@ -128,3 +134,37 @@ class TestFlowExecutorVariables:
         }
         errors = executor.validate_flow(flow)
         assert len(errors) == 0
+
+    def test_resolve_output_dir_uses_flow_value_and_variables(self, tmp_path: Path) -> None:
+        """Test flow output_dir resolves with the merged flow variables."""
+        executor = FlowExecutor(work_dir=tmp_path)
+
+        output = executor._resolve_output_dir(
+            {"output_dir": ".pomelo-pw/artifacts/{{run_id}}"},
+            tmp_path / "course-management.yaml",
+            {"run_id": "20260922"},
+            None,
+        )
+
+        assert output == tmp_path / ".pomelo-pw" / "artifacts" / "20260922"
+
+    def test_resolve_output_dir_prefers_cli_value(self, tmp_path: Path) -> None:
+        """Test a CLI output directory overrides the flow declaration."""
+        executor = FlowExecutor(work_dir=tmp_path)
+
+        output = executor._resolve_output_dir(
+            {"output_dir": "flow-artifacts"},
+            tmp_path / "course-management.yaml",
+            {},
+            Path("cli-artifacts"),
+        )
+
+        assert output == tmp_path / "cli-artifacts"
+
+    def test_resolve_output_dir_defaults_to_flow_file_name(self, tmp_path: Path) -> None:
+        """Test the default output root remains derived from the flow file name."""
+        executor = FlowExecutor(work_dir=tmp_path)
+
+        output = executor._resolve_output_dir({}, tmp_path / "course-management.yaml", {}, None)
+
+        assert output == tmp_path / "course-management"

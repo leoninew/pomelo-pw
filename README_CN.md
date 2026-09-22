@@ -51,8 +51,10 @@ uv pip install pillow
 
 ```yaml
 name: example-smoke
+output_dir: ".pomelo-pw/artifacts/smoke-{{run_id}}"
 variables:
   base_url: "https://example.com"
+  run_id: "local"
 
 steps:
   - type: navigate
@@ -73,7 +75,7 @@ uvx pomelo-pw validate smoke.yaml
 uvx pomelo-pw run smoke.yaml --headless
 ```
 
-默认会将截图和失败产物写入 `./smoke/`。使用 `-o <目录>` 可指定其他输出目录。
+默认会将截图和失败产物写入 `./smoke/`。Flow 可以用顶层 `output_dir` 指定目录，且支持 `{{variable}}`；相对路径以执行命令时的工作目录解析。使用 `-o <目录>` 可在单次运行中覆盖 flow 设置。
 
 ## 使用 Pomelo PW
 
@@ -100,6 +102,9 @@ pomelo-pw run flow.yaml --headless --json
 
 # 覆盖本次运行的 flow 变量
 pomelo-pw run flow.yaml --var base_url=https://staging.example.com
+
+# 覆盖本次运行的 flow output_dir
+pomelo-pw run flow.yaml -o .pomelo-pw/artifacts/manual-run
 
 # 不启动浏览器，只校验 YAML 和步骤参数
 pomelo-pw validate flow.yaml

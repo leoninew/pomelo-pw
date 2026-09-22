@@ -240,6 +240,11 @@ class FlowExecutor:
         """Validate flow structure."""
         errors: list[str] = []
 
+        if "output_dir" in flow:
+            output_dir = flow["output_dir"]
+            if not isinstance(output_dir, str) or not output_dir.strip():
+                errors.append("Flow field 'output_dir' must be a non-empty string")
+
         steps = flow.get("steps", [])
         for i, step in enumerate(steps):
             step_type = step.get("type")
@@ -257,6 +262,25 @@ class FlowExecutor:
                 errors.append(f"Step {i} ({step_type}): {err}")
 
         return errors
+
+    def _resolve_output_dir(
+        self,
+        flow: dict[str, Any],
+        flow_path: Path,
+        variables: dict[str, Any],
+        cli_output_dir: Path | None,
+    ) -> Path:
+        """Resolve the output root, with CLI settings taking precedence."""
+        if cli_output_dir is not None:
+            output_dir = cli_output_dir
+        else:
+            flow_output_dir = flow.get("output_dir")
+            if isinstance(flow_output_dir, str):
+                output_dir = Path(substitute_vars({"output_dir": flow_output_dir}, variables)["output_dir"])
+            else:
+                output_dir = Path(flow_path.stem)
+
+        return output_dir if output_dir.is_absolute() else self.work_dir / output_dir
 
     async def run_flow(
         self,
@@ -283,7 +307,7 @@ class FlowExecutor:
         base_vars = {**flow_vars, **(variables or {})}
 
         # Output directory
-        output = output_dir or self.work_dir / "output"
+        output = self._resolve_output_dir(flow, flow_path, base_vars, output_dir)
         output.mkdir(parents=True, exist_ok=True)
 
         # Data-driven: expand over each row

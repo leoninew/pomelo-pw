@@ -26,7 +26,7 @@ Run browser automation flows using Pomelo PW.
 
 - `pomelo-pw run <flow-file>` - Execute a flow
 - `pomelo-pw run <flow-file> -v` - Verbose output
-- `pomelo-pw run <flow-file> -o <dir>` - Custom output directory
+- `pomelo-pw run <flow-file> -o <dir>` - Override the flow output directory
 - `pomelo-pw run <flow-file> --var key=value` - Override variables
 - `pomelo-pw run <flow-file> --headless` - Headless mode
 - `pomelo-pw validate <flow-file>` - Validate without running
@@ -38,9 +38,11 @@ Run browser automation flows using Pomelo PW.
 ```yaml
 name: flow-name
 description: Optional description
+output_dir: ".pomelo-pw/artifacts/{{run_id}}"
 
 variables:
   base_url: "https://example.com"
+  run_id: "local"
   username: "admin"
 
 steps:
@@ -62,7 +64,9 @@ Use `{{ }}` — doesn't conflict with JS/Shell template literals:
 
 Screenshots save to `./<flow-name>/` by default (derived from filename).
 - `flows/my-test.yaml` → `./my-test/`
-- Override with `-o /custom/path`
+- Set top-level `output_dir` in the flow; it supports `{{variable}}` substitution.
+- Relative `output_dir` values are resolved from the command working directory.
+- Override a flow value with `-o /custom/path`.
 
 ## Available Steps
 

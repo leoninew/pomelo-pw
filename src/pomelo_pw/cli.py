@@ -29,7 +29,7 @@ def cli() -> None:
     "--output",
     "-o",
     type=click.Path(),
-    help="Output directory (default: ./<flow-name>, e.g., 'my-flow.yaml' → './my-flow/')",
+    help="Output directory; overrides flow output_dir (default: ./<flow-name>)",
 )
 @click.option("--headless", is_flag=True, help="Run in headless mode (default: visible browser)")
 @click.option("--var", multiple=True, help="Override variable (format: key=value)")
@@ -57,7 +57,7 @@ def run(
     if base_url:
         variables["base_url"] = base_url
 
-    output_dir = Path(output) if output else work_dir / flow_path.stem
+    output_dir = Path(output) if output is not None else None
 
     executor = FlowExecutor(work_dir=work_dir, verbose=verbose)
 

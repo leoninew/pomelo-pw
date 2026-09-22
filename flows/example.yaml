@@ -1,9 +1,11 @@
 # Example flow for testing
 name: example-flow
 description: Example flow demonstrating various steps
+output_dir: ".pomelo-pw/artifacts/example-{{run_id}}"
 
 variables:
   base_url: "https://example.com"
+  run_id: "local"
 
 steps:
   - type: navigate
