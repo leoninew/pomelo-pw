@@ -31,7 +31,7 @@ def cli() -> None:
     type=click.Path(),
     help="Output directory; overrides flow output_dir (default: ./<flow-name>)",
 )
-@click.option("--headless", is_flag=True, help="Run in headless mode (default: visible browser)")
+@click.option("--headless", is_flag=True, default=None, help="Run headlessly, overriding flow configuration")
 @click.option("--var", multiple=True, help="Override variable (format: key=value)")
 @click.option("--verbose", "-v", is_flag=True, help="Show step-by-step progress")
 @click.option("--json", "json_output", is_flag=True, help="Output result as JSON")
@@ -39,7 +39,7 @@ def run(
     flow: str,
     base_url: str | None,
     output: str | None,
-    headless: bool,
+    headless: bool | None,
     var: tuple[str, ...],
     verbose: bool,
     json_output: bool,

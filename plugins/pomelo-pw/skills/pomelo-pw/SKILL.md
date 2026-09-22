@@ -38,7 +38,8 @@ Run browser automation flows using Pomelo PW.
 ```yaml
 name: flow-name
 description: Optional description
-output_dir: ".pomelo-pw/artifacts/{{run_id}}"
+output_dir: "output"
+headless: false
 
 variables:
   base_url: "https://example.com"
@@ -67,6 +68,8 @@ Screenshots save to `./<flow-name>/` by default (derived from filename).
 - Set top-level `output_dir` in the flow; it supports `{{variable}}` substitution.
 - Relative `output_dir` values are resolved from the command working directory.
 - Override a flow value with `-o /custom/path`.
+- Set top-level boolean `headless` to run without a visible browser; it defaults to `false`.
+- Override browser mode with `--headless`.
 
 ## Available Steps
 
@@ -81,7 +84,7 @@ Screenshots save to `./<flow-name>/` by default (derived from filename).
 | `wait` | - | Wait for conditions |
 | `scroll` | `direction`, `distance` | Scroll page |
 | `hover` | `selector` | Hover over element |
-| `select` | `selector`, one of `value` / `label` | Select dropdown option |
+| `select` | `selector`, one of `value` / `label` / `index` | Select dropdown option |
 | `check` / `uncheck` | `selector` | Toggle checkbox |
 | `evaluate` | `script` | Execute JavaScript |
 | `set-viewport` | `width`, `height` | Set viewport size |
@@ -98,6 +101,7 @@ Provide `selector` and exactly one option selector:
 
 - `value`: the option's HTML `value` attribute
 - `label`: the option's exact visible text
+- `index`: the option's zero-based position
 
 ```yaml
 # Prefer a stable option value when available
@@ -109,6 +113,11 @@ Provide `selector` and exactly one option selector:
 - type: select
   selector: "#country"
   label: "China"
+
+# Use a zero-based position when the option value is created by an earlier UI step.
+- type: select
+  selector: "#course-adoption"
+  index: 1
 ```
 
 ### wait — Enhanced SPA Support

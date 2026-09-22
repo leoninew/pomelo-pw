@@ -53,8 +53,8 @@ pomelo-pw/
 | 配置类型 | 位置 | 用途 |
 |----------|------|------|
 | **工具配置** | 内置默认值 | 浏览器行为、视口、超时等运行参数 |
-| **流程配置** | `flow.yaml` | 变量定义、步骤序列、`output_dir` |
-| **运行时配置** | CLI 参数 | 变量覆盖、输出路径 |
+| **流程配置** | `flow.yaml` | 变量定义、步骤序列、`output_dir`、`headless` |
+| **运行时配置** | CLI 参数 | 变量覆盖、输出路径、浏览器模式 |
 
 ### 工作目录模型
 
@@ -66,7 +66,7 @@ pomelo-pw/
     └── screenshots/
 ```
 
-Flow 可以在顶层用 `output_dir` 覆盖默认输出目录；相对路径以用户工作目录解析，支持 `{{variable}}`。CLI `-o/--output` 的优先级高于 flow 配置。
+Flow 可以在顶层用 `output_dir` 覆盖默认输出目录；相对路径以用户工作目录解析，支持 `{{variable}}`。CLI `-o/--output` 的优先级高于 flow 配置。Flow 还可以用布尔型 `headless` 指定浏览器模式，未配置时默认显示浏览器；CLI `--headless` 的优先级更高。
 
 ---
 
@@ -131,13 +131,13 @@ CLI 参数 > 步骤级变量 > 流程级变量
 | `wait` | - | 等待条件 |
 | `scroll` | - | 滚动页面 |
 | `hover` | `selector` | 悬停 |
-| `select` | `selector`，`value` 或 `label` 二选一 | 按 HTML value 或可见文本选择下拉选项 |
+| `select` | `selector`，`value`、`label` 或 `index` 三选一 | 按 HTML value、可见文本或从零开始的选项序号选择下拉选项 |
 | `check` | `selector` | 勾选复选框 |
 | `uncheck` | `selector` | 取消勾选 |
 | `evaluate` | `script` | 执行 JavaScript |
 | `set-viewport` | - | 设置视口 |
 
-`select` 的 `value` 对应 option 的 HTML `value` 属性；`label` 对应用户可见的精确选项文本。两者必须且只能提供一个。
+`select` 的 `value` 对应 option 的 HTML `value` 属性；`label` 对应用户可见的精确选项文本；`index` 对应从零开始的选项序号。三者必须且只能提供一个。
 
 ---
 

@@ -69,6 +69,12 @@ class TestFlowExecutorValidation:
         errors = executor.validate_flow({"output_dir": output_dir, "steps": []})
         assert errors == ["Flow field 'output_dir' must be a non-empty string"]
 
+    @pytest.mark.parametrize("headless", [None, 1, "true", []])
+    def test_validate_flow_rejects_invalid_headless(self, executor: FlowExecutor, headless: object) -> None:
+        """Test validation rejects non-boolean headless values."""
+        errors = executor.validate_flow({"headless": headless, "steps": []})
+        assert errors == ["Flow field 'headless' must be a boolean"]
+
     def test_validate_flow_with_variables_field(self, executor: FlowExecutor) -> None:
         """Test validation allows variables field in steps."""
         flow = {
@@ -168,3 +174,17 @@ class TestFlowExecutorVariables:
         output = executor._resolve_output_dir({}, tmp_path / "course-management.yaml", {}, None)
 
         assert output == tmp_path / "course-management"
+
+    @pytest.mark.parametrize(
+        ("flow", "cli_headless", "expected"),
+        [
+            ({"headless": True}, None, True),
+            ({"headless": False}, True, True),
+            ({}, None, False),
+        ],
+    )
+    def test_resolve_headless_prefers_cli_value(
+        self, executor: FlowExecutor, flow: dict[str, object], cli_headless: bool | None, expected: bool
+    ) -> None:
+        """Test CLI browser mode overrides the flow value and defaults to visible."""
+        assert executor._resolve_headless(flow, cli_headless) is expected

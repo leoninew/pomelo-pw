@@ -51,7 +51,8 @@ Create `smoke.yaml`:
 
 ```yaml
 name: example-smoke
-output_dir: ".pomelo-pw/artifacts/smoke-{{run_id}}"
+output_dir: "output"
+headless: false
 variables:
   base_url: "https://example.com"
   run_id: "local"
@@ -75,7 +76,7 @@ uvx pomelo-pw validate smoke.yaml
 uvx pomelo-pw run smoke.yaml --headless
 ```
 
-Screenshots and failure artifacts are written to `./smoke/` by default. A flow can set a top-level `output_dir`, including `{{variable}}` references; relative paths are resolved from the command working directory. Use `-o <directory>` to override the flow setting for one run.
+Screenshots and failure artifacts are written to `./smoke/` by default. A flow can set a top-level `output_dir`, including `{{variable}}` references; relative paths are resolved from the command working directory. Flows can also set a top-level boolean `headless`; it defaults to `false`. Use `-o <directory>` or `--headless` to override either setting for one run.
 
 ## Use Pomelo PW
 
@@ -145,7 +146,7 @@ steps:
 | `navigate` | `url` | Open a page |
 | `click`, `hover`, `press` | `selector` or `key` | Interact with an element or keyboard |
 | `fill`, `type` | `selector`, `value` | Enter text |
-| `select` | `selector`, one of `value` / `label` | Choose an option by HTML value or visible text |
+| `select` | `selector`, one of `value` / `label` / `index` | Choose an option by HTML value, visible text, or zero-based position |
 | `wait` | selector, URL, network, or timing condition | Synchronize with dynamic UI |
 | `screenshot` | `file` | Capture a page or element, optionally against a baseline |
 | `check`, `uncheck` | `selector` | Control checkboxes |

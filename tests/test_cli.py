@@ -51,7 +51,7 @@ class TestBrowserCommands:
 
 
 class TestRunCommand:
-    """Tests for output directory dispatch."""
+    """Tests for flow runtime option dispatch."""
 
     def test_run_leaves_output_unset_for_flow_configuration(self) -> None:
         """Flow output_dir remains available when the CLI option is omitted."""
@@ -67,6 +67,7 @@ class TestRunCommand:
 
         assert result.exit_code == 0
         assert executor_class.return_value.run_flow.call_args.kwargs["output_dir"] is None
+        assert executor_class.return_value.run_flow.call_args.kwargs["headless"] is None
 
     def test_run_passes_explicit_output_as_cli_override(self) -> None:
         """An explicit CLI output directory takes precedence over flow configuration."""
@@ -82,3 +83,18 @@ class TestRunCommand:
 
         assert result.exit_code == 0
         assert executor_class.return_value.run_flow.call_args.kwargs["output_dir"] == Path("artifacts")
+
+    def test_run_passes_headless_as_cli_override(self) -> None:
+        """The explicit headless flag overrides the flow declaration."""
+        runner = CliRunner()
+
+        with runner.isolated_filesystem():
+            Path("sample.yaml").write_text("steps: []\n", encoding="utf-8")
+            with patch("pomelo_pw.cli.FlowExecutor") as executor_class:
+                executor_class.return_value.run_flow = AsyncMock(
+                    return_value={"success": True, "steps_executed": 0, "screenshots": []}
+                )
+                result = runner.invoke(cli, ["run", "sample.yaml", "--headless"])
+
+        assert result.exit_code == 0
+        assert executor_class.return_value.run_flow.call_args.kwargs["headless"] is True

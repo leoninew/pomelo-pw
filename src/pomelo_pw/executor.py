@@ -245,6 +245,9 @@ class FlowExecutor:
             if not isinstance(output_dir, str) or not output_dir.strip():
                 errors.append("Flow field 'output_dir' must be a non-empty string")
 
+        if "headless" in flow and not isinstance(flow["headless"], bool):
+            errors.append("Flow field 'headless' must be a boolean")
+
         steps = flow.get("steps", [])
         for i, step in enumerate(steps):
             step_type = step.get("type")
@@ -282,12 +285,20 @@ class FlowExecutor:
 
         return output_dir if output_dir.is_absolute() else self.work_dir / output_dir
 
+    def _resolve_headless(self, flow: dict[str, Any], cli_headless: bool | None) -> bool:
+        """Resolve browser mode, with CLI settings taking precedence."""
+        if cli_headless is not None:
+            return cli_headless
+
+        flow_headless = flow.get("headless", False)
+        return flow_headless if isinstance(flow_headless, bool) else False
+
     async def run_flow(
         self,
         flow_path: Path,
         variables: dict[str, Any] | None = None,
         output_dir: Path | None = None,
-        headless: bool = False,
+        headless: bool | None = None,
     ) -> dict[str, Any]:
         """Execute flow, with data-driven expansion if 'data' field is present."""
         start_time = time.time()
@@ -310,6 +321,8 @@ class FlowExecutor:
         output = self._resolve_output_dir(flow, flow_path, base_vars, output_dir)
         output.mkdir(parents=True, exist_ok=True)
 
+        resolved_headless = self._resolve_headless(flow, headless)
+
         # Data-driven: expand over each row
         data_rows: list[dict[str, Any]] = flow.get("data", [])
 
@@ -321,7 +334,7 @@ class FlowExecutor:
                 steps=steps,
                 base_vars=base_vars,
                 output=output,
-                headless=headless,
+                headless=resolved_headless,
                 data_rows=data_rows,
                 start_time=start_time,
             )
@@ -333,9 +346,9 @@ class FlowExecutor:
         if pw_config.executable_path:
             click.echo(f"Using system Chrome: {pw_config.executable_path}")
 
-        click.echo(f"Launching browser (headless={headless})...")
+        click.echo(f"Launching browser (headless={resolved_headless})...")
         async with async_playwright() as p:
-            browser = await self._launch_browser(p, headless)
+            browser = await self._launch_browser(p, resolved_headless)
             try:
                 result = await self._run_once(
                     browser=browser,

@@ -51,7 +51,8 @@ uv pip install pillow
 
 ```yaml
 name: example-smoke
-output_dir: ".pomelo-pw/artifacts/smoke-{{run_id}}"
+output_dir: "output"
+headless: false
 variables:
   base_url: "https://example.com"
   run_id: "local"
@@ -75,7 +76,7 @@ uvx pomelo-pw validate smoke.yaml
 uvx pomelo-pw run smoke.yaml --headless
 ```
 
-默认会将截图和失败产物写入 `./smoke/`。Flow 可以用顶层 `output_dir` 指定目录，且支持 `{{variable}}`；相对路径以执行命令时的工作目录解析。使用 `-o <目录>` 可在单次运行中覆盖 flow 设置。
+默认会将截图和失败产物写入 `./smoke/`。Flow 可以用顶层 `output_dir` 指定目录，且支持 `{{variable}}`；相对路径以执行命令时的工作目录解析。Flow 也可用布尔型顶层字段 `headless` 指定无头模式，默认值为 `false`。使用 `-o <目录>` 或 `--headless` 可在单次运行中分别覆盖这两项设置。
 
 ## 使用 Pomelo PW
 
@@ -145,7 +146,7 @@ steps:
 | `navigate` | `url` | 打开页面 |
 | `click`、`hover`、`press` | `selector` 或 `key` | 与元素或键盘交互 |
 | `fill`、`type` | `selector`、`value` | 输入文本 |
-| `select` | `selector`，`value` / `label` 二选一 | 按 HTML value 或可见文本选择选项 |
+| `select` | `selector`，`value`、`label` 或 `index` 三选一 | 按 HTML value、可见文本或从零开始的选项序号选择选项 |
 | `wait` | 选择器、URL、网络或时间条件 | 与动态 UI 同步 |
 | `screenshot` | `file` | 截取页面或元素，可选基线对比 |
 | `check`、`uncheck` | `selector` | 控制复选框 |
