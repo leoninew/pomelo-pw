@@ -98,22 +98,3 @@ class TestRunCommand:
 
         assert result.exit_code == 0
         assert executor_class.return_value.run_flow.call_args.kwargs["headless"] is True
-
-
-class TestListCommand:
-    """Tests for example flow discovery."""
-
-    def test_list_discovers_nested_example_flows(self) -> None:
-        """The list command reports nested YAML files under example."""
-        runner = CliRunner()
-
-        with runner.isolated_filesystem():
-            Path("example/public").mkdir(parents=True)
-            Path("example/public/page-smoke.yaml").write_text("steps: []\n", encoding="utf-8")
-            Path("root-flow.yaml").write_text("steps: []\n", encoding="utf-8")
-            result = runner.invoke(cli, ["list"])
-
-        assert result.exit_code == 0
-        assert "Flows in ./example/:" in result.output
-        assert "  - example/public/page-smoke.yaml" in result.output
-        assert "  - root-flow.yaml" in result.output

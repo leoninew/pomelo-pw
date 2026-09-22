@@ -126,21 +126,6 @@ def install() -> None:
         sys.exit(1)
 
 
-@cli.command("list", context_settings={"help_option_names": ["-h", "--help"]})
-def list_flows() -> None:
-    """List available flows in current directory."""
-    work_dir = Path.cwd()
-    examples_dir = work_dir / "example"
-
-    if examples_dir.exists():
-        click.echo("Flows in ./example/:")
-        for flow_file in sorted(examples_dir.rglob("*.yaml")):
-            click.echo(f"  - {flow_file.relative_to(work_dir).as_posix()}")
-
-    for flow_file in work_dir.glob("*.yaml"):
-        click.echo(f"  - {flow_file.name}")
-
-
 @cli.command(context_settings={"help_option_names": ["-h", "--help"]})
 def steps() -> None:
     """List available step types."""
