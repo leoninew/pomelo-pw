@@ -5,7 +5,16 @@ from unittest.mock import AsyncMock, patch
 
 from click.testing import CliRunner
 
+from pomelo_pw import __version__
 from pomelo_pw.cli import cli
+
+
+def test_version_reports_package_version() -> None:
+    """The root CLI reports the installed package version."""
+    result = CliRunner().invoke(cli, ["--version"])
+
+    assert result.exit_code == 0
+    assert result.output == f"cli, version {__version__}\n"
 
 
 class TestBrowserCommands:

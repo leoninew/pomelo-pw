@@ -13,11 +13,13 @@ from typing import Any
 import click
 from playwright._impl._driver import compute_driver_executable, get_driver_env
 
+from pomelo_pw import __version__
 from pomelo_pw.executor import FlowExecutor
 from pomelo_pw.steps import get_step, list_steps
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
+@click.version_option(__version__)
 def cli() -> None:
     """Pomelo PW - Flow-based UI Automation Tool."""
 
