@@ -1,0 +1,26 @@
+name: conditional-content
+description: Capture alternate evidence based on public page content.
+output_dir: "output"
+headless: false
+
+variables:
+  base_url: "https://the-internet.herokuapp.com"
+
+steps:
+  - type: navigate
+    url: "{{base_url}}"
+
+  - type: if
+    condition: "element_visible: h1"
+    then:
+      - type: screenshot
+        file: "conditional-content/heading-visible.png"
+    else:
+      - type: screenshot
+        file: "conditional-content/heading-missing.png"
+
+  - type: if
+    condition: "text_contains: Welcome to the-internet"
+    then:
+      - type: screenshot
+        file: "conditional-content/expected-copy.png"

@@ -1,0 +1,18 @@
+name: reuse-browser-state
+description: Load state written by save-browser-state before revisiting the public page.
+output_dir: "output"
+headless: false
+
+variables:
+  base_url: "https://the-internet.herokuapp.com"
+
+steps:
+  - type: load-state
+    file: "browser-state.json"
+
+  - type: navigate
+    url: "{{base_url}}"
+    wait_for_selector: "h1"
+
+  - type: screenshot
+    file: "browser-state/reused.png"

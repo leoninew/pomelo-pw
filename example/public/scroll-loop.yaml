@@ -1,0 +1,23 @@
+name: scroll-loop
+description: Perform bounded scrolling with a deliberate wait between passes.
+output_dir: "output"
+headless: false
+
+variables:
+  base_url: "https://the-internet.herokuapp.com"
+
+steps:
+  - type: navigate
+    url: "{{base_url}}"
+
+  - type: loop
+    times: 3
+    steps:
+      - type: scroll
+        direction: down
+        distance: 300
+      - type: wait
+        delay: 300
+
+  - type: screenshot
+    file: "scroll-loop/complete.png"

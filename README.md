@@ -54,7 +54,7 @@ name: example-smoke
 output_dir: "output"
 headless: false
 variables:
-  base_url: "https://example.com"
+  base_url: "https://the-internet.herokuapp.com"
   run_id: "local"
 
 steps:
@@ -84,10 +84,10 @@ Screenshots and failure artifacts are written to `./smoke/` by default. A flow c
 
 ```bash
 # Inspect a page and copy a selector from the interactive overlay
-pomelo-pw explore https://example.com
+pomelo-pw explore https://the-internet.herokuapp.com
 
 # Record clicks, fills, and Enter presses into a YAML flow
-pomelo-pw record https://example.com recorded-flow.yaml
+pomelo-pw record https://the-internet.herokuapp.com recorded-flow.yaml
 ```
 
 Prefer selectors based on stable semantics, such as `role=button[name="Continue"]`, over presentation-oriented CSS classes.
@@ -162,7 +162,7 @@ pomelo-pw spec wait
 pomelo-pw spec select
 ```
 
-The [flows/](flows/) directory contains runnable examples for waits, retries, saved state, data-driven runs, conditions, loops, JavaScript evaluation, and visual baselines. The bundled [agent skill](plugins/pomelo-pw/skills/pomelo-pw/SKILL.md) contains agent-oriented guidance and reusable flow templates.
+The [example/](example/) directory organizes runnable flows into public checks, browser interactions, and browser-state reuse. Its [README](example/README.md) describes each scenario, prerequisites, and variable overrides. The bundled [agent skill](plugins/pomelo-pw/skills/pomelo-pw/SKILL.md) contains agent-oriented guidance and reusable flow templates.
 
 ## Develop
 
@@ -223,7 +223,7 @@ Release versions are derived from Git history. After reviewing the version-file 
 ```text
 src/pomelo_pw/       CLI, executor, configuration, and step implementations
 tests/               Unit and integration-style tests
-flows/               Runnable YAML examples
+example/             Runnable YAML examples and usage guide
 plugins/pomelo-pw/   Native plugin and agent skill
 docs/                Architecture and process documentation
 scripts/             Plugin synchronization and release helpers

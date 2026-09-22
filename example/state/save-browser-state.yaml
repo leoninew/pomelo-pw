@@ -1,0 +1,18 @@
+name: save-browser-state
+description: Save cookies and browser storage from a public page for a later flow.
+output_dir: "output"
+headless: false
+
+variables:
+  base_url: "https://the-internet.herokuapp.com"
+
+steps:
+  - type: navigate
+    url: "{{base_url}}"
+    wait_for_selector: "h1"
+
+  - type: save-state
+    file: "browser-state.json"
+
+  - type: screenshot
+    file: "browser-state/saved.png"

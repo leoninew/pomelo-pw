@@ -54,7 +54,7 @@ name: example-smoke
 output_dir: "output"
 headless: false
 variables:
-  base_url: "https://example.com"
+  base_url: "https://the-internet.herokuapp.com"
   run_id: "local"
 
 steps:
@@ -84,10 +84,10 @@ uvx pomelo-pw run smoke.yaml --headless
 
 ```bash
 # 在交互式覆盖层中检查页面并复制选择器
-pomelo-pw explore https://example.com
+pomelo-pw explore https://the-internet.herokuapp.com
 
 # 将点击、填充和 Enter 按键记录为 YAML flow
-pomelo-pw record https://example.com recorded-flow.yaml
+pomelo-pw record https://the-internet.herokuapp.com recorded-flow.yaml
 ```
 
 优先使用稳定的语义化选择器，例如 `role=button[name="Continue"]`，而不是依赖样式表现的 CSS class。
@@ -162,7 +162,7 @@ pomelo-pw spec wait
 pomelo-pw spec select
 ```
 
-[flows/](flows/) 目录提供等待、重试、保存状态、数据驱动执行、条件、循环、JavaScript 执行和视觉基线的可运行示例。内置的 [Agent skill](plugins/pomelo-pw/skills/pomelo-pw/SKILL.md) 提供了面向 Agent 的说明和可复用 flow 模板。
+[example/](example/) 目录将可运行 flow 划分为公共检查、浏览器交互和浏览器状态复用；其 [README](example/README.md) 说明各场景、前置条件和变量覆盖方式。内置的 [Agent skill](plugins/pomelo-pw/skills/pomelo-pw/SKILL.md) 提供了面向 Agent 的说明和可复用 flow 模板。
 
 ## 开发
 
@@ -223,7 +223,7 @@ make binary
 ```text
 src/pomelo_pw/       CLI、执行器、配置和步骤实现
 tests/               单元测试和集成风格测试
-flows/               可运行的 YAML 示例
+example/             可运行的 YAML 示例和使用说明
 plugins/pomelo-pw/   原生插件和 Agent skill
 docs/                架构和过程文档
 scripts/             插件同步和发布辅助脚本

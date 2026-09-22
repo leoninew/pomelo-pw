@@ -1,0 +1,27 @@
+name: dynamic-content-retry
+description: Start a delayed public action and retry transient interaction or wait failures.
+output_dir: "output"
+headless: false
+
+variables:
+  base_url: "https://the-internet.herokuapp.com"
+
+steps:
+  - type: navigate
+    url: "{{base_url}}/dynamic_loading/1"
+    wait_for_selector: "#start button"
+
+  - type: click
+    selector: "#start button"
+    retry: 2
+    retry_delay: 250
+
+  - type: wait
+    selector: "#finish"
+    state: visible
+    timeout: 10000
+    retry: 2
+    retry_delay: 500
+
+  - type: screenshot
+    file: "dynamic-content-retry/loaded.png"

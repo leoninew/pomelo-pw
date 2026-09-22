@@ -1,0 +1,20 @@
+name: scripted-page-check
+description: Extract page evidence with JavaScript without colliding with {{variable}} syntax.
+output_dir: "output"
+headless: false
+
+variables:
+  base_url: "https://the-internet.herokuapp.com"
+
+steps:
+  - type: navigate
+    url: "{{base_url}}"
+
+  - type: evaluate
+    script: |
+      const title = document.title;
+      const heading = document.querySelector('h1')?.textContent?.trim();
+      return {title, heading, url: window.location.href};
+
+  - type: screenshot
+    file: "scripted-page-check/evidence.png"

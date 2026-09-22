@@ -1,0 +1,23 @@
+name: visual-regression
+description: Create and compare a same-run visual baseline for a stable public page.
+output_dir: "output"
+headless: false
+
+variables:
+  base_url: "https://the-internet.herokuapp.com"
+
+steps:
+  - type: navigate
+    url: "{{base_url}}"
+
+  - type: screenshot
+    file: "visual-regression/baseline.png"
+    full_page: true
+
+  - type: screenshot
+    file: "visual-regression/current.png"
+    full_page: true
+    baseline: "visual-regression/baseline.png"
+    threshold: 0.01
+    diff_output: "visual-regression/diff.png"
+    fail_on_diff: true

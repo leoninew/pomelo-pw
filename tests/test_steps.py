@@ -171,14 +171,15 @@ class TestClickStepExecution:
 
 
 class TestSelectStep:
-    """Tests for selecting options by stable values or visible labels."""
+    """Tests for selecting options by value, label, or index."""
 
     def test_validate_requires_exactly_one_option_selector(self) -> None:
-        assert "Provide exactly one of: value, label" in SelectStep.validate_params({"selector": "#kind"})
-        assert "Provide exactly one of: value, label" in SelectStep.validate_params(
+        assert "Provide exactly one of: value, label, index" in SelectStep.validate_params({"selector": "#kind"})
+        assert "Provide exactly one of: value, label, index" in SelectStep.validate_params(
             {"selector": "#kind", "value": "book", "label": "教材"},
         )
         assert SelectStep.validate_params({"selector": "#kind", "label": "教材"}) == []
+        assert SelectStep.validate_params({"selector": "#kind", "index": 0}) == []
 
     @pytest.mark.asyncio
     async def test_selects_an_option_by_visible_label(self) -> None:
@@ -190,6 +191,17 @@ class TestSelectStep:
 
         assert result.success
         page.select_option.assert_awaited_once_with("#kind", label="教材", timeout=30000)
+
+    @pytest.mark.asyncio
+    async def test_selects_an_option_by_zero_based_index(self) -> None:
+        page = MagicMock()
+        page.select_option = AsyncMock()
+        context = StepContext(page=page, variables={}, output_dir=Path("/tmp"), screenshots=[])
+
+        result = await SelectStep().execute(context, {"selector": "#kind", "index": 2})
+
+        assert result.success
+        page.select_option.assert_awaited_once_with("#kind", index=2, timeout=30000)
 
 
 class TestEvaluateStepExecution:

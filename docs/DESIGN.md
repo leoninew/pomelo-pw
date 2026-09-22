@@ -39,7 +39,7 @@ pomelo-pw/
 │           ├── wait.py
 │           └── ...
 ├── tests/                   # 单元测试
-├── flows/                   # 示例流程
+├── example/                 # 示例流程
 └── docs/
     └── DESIGN.md
 ```
@@ -60,7 +60,7 @@ pomelo-pw/
 
 ```
 用户工作目录/
-├── flows/              # 流程定义（可选）
+├── example/            # 示例流程（可选）
 │   └── my-flow.yaml
 └── my-flow/            # 默认输出目录（按 flow 文件名）
     └── screenshots/

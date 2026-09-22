@@ -1,0 +1,26 @@
+name: data-driven-pages
+description: Run the same public page smoke check with labeled URL variants.
+output_dir: "output"
+headless: false
+
+variables:
+  base_url: "https://the-internet.herokuapp.com"
+
+data:
+  - _label: "homepage"
+    path: "/"
+  - _label: "campaign-a"
+    path: "/?campaign=a"
+  - _label: "campaign-b"
+    path: "/?campaign=b"
+
+steps:
+  - type: navigate
+    url: "{{base_url}}{{path}}"
+
+  - type: wait
+    selector: "h1"
+    state: visible
+
+  - type: screenshot
+    file: "page.png"

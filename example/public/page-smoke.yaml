@@ -1,0 +1,27 @@
+name: public-page-smoke
+description: Capture a public landing page at a desktop viewport.
+output_dir: "output"
+headless: false
+
+variables:
+  base_url: "https://www.linkedin.com"
+
+steps:
+  - type: navigate
+    url: "{{base_url}}"
+    wait_for_selector: "body"
+
+  - type: set-viewport
+    width: 1440
+    height: 900
+
+  - type: screenshot
+    file: "page-smoke/home.png"
+    full_page: true
+
+  - type: scroll
+    direction: down
+    distance: 600
+
+  - type: screenshot
+    file: "page-smoke/after-scroll.png"

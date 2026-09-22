@@ -1,0 +1,51 @@
+name: form-controls
+description: Exercise select, checkbox, text input, and keyboard steps on a public demo site.
+output_dir: "output"
+headless: false
+
+variables:
+  base_url: "https://the-internet.herokuapp.com"
+
+steps:
+  - type: navigate
+    url: "{{base_url}}/dropdown"
+    wait_for_selector: "#dropdown"
+
+  - type: select
+    selector: "#dropdown"
+    index: 2
+
+  - type: screenshot
+    file: "form-controls/dropdown.png"
+
+  - type: navigate
+    url: "{{base_url}}/checkboxes"
+    wait_for_selector: "input[type=checkbox]"
+
+  - type: check
+    selector: "input[type=checkbox] >> nth=0"
+
+  - type: uncheck
+    selector: "input[type=checkbox] >> nth=1"
+
+  - type: screenshot
+    file: "form-controls/checkboxes.png"
+
+  - type: navigate
+    url: "{{base_url}}/inputs"
+    wait_for_selector: "input[type=number]"
+
+  - type: fill
+    selector: "input[type=number]"
+    value: "4"
+
+  - type: type
+    selector: "input[type=number]"
+    value: "2"
+    delay: 50
+
+  - type: press
+    key: "ArrowUp"
+
+  - type: screenshot
+    file: "form-controls/number-input.png"

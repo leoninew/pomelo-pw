@@ -1,0 +1,28 @@
+name: incremental-content
+description: Capture loaded content while scrolling a public infinite-scroll demo.
+output_dir: "output"
+headless: false
+
+variables:
+  base_url: "https://the-internet.herokuapp.com"
+
+steps:
+  - type: navigate
+    url: "{{base_url}}/infinite_scroll"
+
+  - type: loop
+    times: 3
+    steps:
+      - type: scroll
+        direction: down
+        distance: 700
+      - type: wait
+        delay: 500
+      - type: if
+        condition: "element_exists: .jscroll-added"
+        then:
+          - type: wait
+            delay: 250
+
+  - type: screenshot
+    file: "incremental-content/loaded.png"

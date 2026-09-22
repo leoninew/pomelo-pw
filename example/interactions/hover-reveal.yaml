@@ -1,0 +1,22 @@
+name: hover-reveal
+description: Reveal hover-only content on a public demo page before capturing evidence.
+output_dir: "output"
+headless: false
+
+variables:
+  base_url: "https://the-internet.herokuapp.com"
+
+steps:
+  - type: navigate
+    url: "{{base_url}}/hovers"
+    wait_for_selector: ".figure"
+
+  - type: hover
+    selector: ".figure"
+
+  - type: wait
+    selector: ".figure .figcaption"
+    state: visible
+
+  - type: screenshot
+    file: "hover-reveal/profile.png"

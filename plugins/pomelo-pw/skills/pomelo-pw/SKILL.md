@@ -42,7 +42,7 @@ output_dir: "output"
 headless: false
 
 variables:
-  base_url: "https://example.com"
+  base_url: "https://the-internet.herokuapp.com"
   run_id: "local"
   username: "admin"
 
@@ -64,7 +64,7 @@ Use `{{ }}` — doesn't conflict with JS/Shell template literals:
 ### Output Directory
 
 Screenshots save to `./<flow-name>/` by default (derived from filename).
-- `flows/my-test.yaml` → `./my-test/`
+- `example/my-test.yaml` → `./my-test/`
 - Set top-level `output_dir` in the flow; it supports `{{variable}}` substitution.
 - Relative `output_dir` values are resolved from the command working directory.
 - Override a flow value with `-o /custom/path`.
@@ -246,7 +246,7 @@ Run the same flow with multiple data sets:
 ```yaml
 name: multi-user-test
 variables:
-  base_url: "https://example.com"
+  base_url: "https://the-internet.herokuapp.com"
 
 data:
   - _label: "user-alice"

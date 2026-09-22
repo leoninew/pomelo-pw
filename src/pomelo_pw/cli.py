@@ -130,12 +130,12 @@ def install() -> None:
 def list_flows() -> None:
     """List available flows in current directory."""
     work_dir = Path.cwd()
-    flows_dir = work_dir / "flows"
+    examples_dir = work_dir / "example"
 
-    if flows_dir.exists():
-        click.echo("Flows in ./flows/:")
-        for flow_file in flows_dir.glob("*.yaml"):
-            click.echo(f"  - {flow_file.stem}")
+    if examples_dir.exists():
+        click.echo("Flows in ./example/:")
+        for flow_file in sorted(examples_dir.rglob("*.yaml")):
+            click.echo(f"  - {flow_file.relative_to(work_dir).as_posix()}")
 
     for flow_file in work_dir.glob("*.yaml"):
         click.echo(f"  - {flow_file.name}")
