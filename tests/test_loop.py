@@ -40,10 +40,10 @@ class TestLoopStepExecute:
         inner = [{"type": "scroll", "direction": "down", "distance": 100}]
         result = await step.execute(ctx, {"type": "loop", "steps": inner, "times": 3})
         assert result.success is True
-        assert result.data is not None
-        assert result.data["type"] == "times"
-        assert result.data["iterations"] == 3
-        assert result.data["steps"] == inner
+        assert result.control is not None
+        assert result.control["type"] == "times"
+        assert result.control["iterations"] == 3
+        assert result.control["steps"] == inner
 
     @pytest.mark.asyncio
     async def test_while_loop_returns_correct_data(self) -> None:
@@ -60,10 +60,10 @@ class TestLoopStepExecute:
             },
         )
         assert result.success is True
-        assert result.data is not None
-        assert result.data["type"] == "while"
-        assert result.data["condition"] == "element_visible: .load-more"
-        assert result.data["max_iterations"] == 5
+        assert result.control is not None
+        assert result.control["type"] == "while"
+        assert result.control["condition"] == "element_visible: .load-more"
+        assert result.control["max_iterations"] == 5
 
     @pytest.mark.asyncio
     async def test_both_times_and_while_fails(self) -> None:
@@ -102,5 +102,5 @@ class TestLoopStepExecute:
             },
         )
         assert result.success is True
-        assert result.data is not None
-        assert result.data["max_iterations"] == 100
+        assert result.control is not None
+        assert result.control["max_iterations"] == 100

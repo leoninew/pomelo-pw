@@ -111,7 +111,28 @@ pomelo-pw run flow.yaml -o .pomelo-pw/artifacts/manual-run
 pomelo-pw validate flow.yaml
 ```
 
-变量使用 `{{name}}`；CLI 参数优先于步骤级变量，步骤级变量优先于 flow 级变量。`${name}` 会被保留给 JavaScript 和 shell 模板字符串。
+输入优先级为：CLI/API 显式覆盖 > 当前步骤变量 > 外层步骤变量 > data 行 > flow 变量。`--var key=value` 仍是文本输入。`inputs` 和 `results` 是保留名称，不能作为输入根变量。
+
+### 运行时数据
+
+完整引用保留 JSON 原生类型：`{{name}}`、`{{item.path}}`、`{{inputs.filter}}`、`{{results.records[0].id}}`。引用嵌入文本时只接受标量，布尔、数字和 null 使用 JSON 文本形式；对象和数组不能拼入文本。路径支持标识符字段和非负数组下标。用 `\{{` 表示字面量模板开头；`${name}` 保持原样。
+
+```yaml
+steps:
+  - type: evaluate
+    script: "() => [{id: 'a', enabled: false}]"
+    save_as: records
+  - type: evaluate
+    args: "{{results.records[0]}}"
+    script: "async (record) => ({id: record.id, enabled: record.enabled})"
+    save_as: selected
+```
+
+`evaluate.script` 必须是同步或 async 函数表达式，源码保持原文。通过 `args` 传递单个 JSON 载荷；未提供 args 时不传参数，`args: null` 则传入一个 null 参数。函数必须明确返回 JSON 值，不需要数据时可 `return null`；不支持的类型、非有限数字和循环数据会报错。
+
+只有产生公开输出的步骤支持 `save_as`，当前为 `evaluate`。成功后保存结果快照，再次成功写入会覆盖。替换时参数可以读取上一次值，但失败会使该绑定失效。嵌套步骤共享结果，data 行之间隔离。子步骤执行时才解析参数，子步骤局部变量不会泄漏给兄弟步骤。结果字符串始终作为数据，不重新解释为模板。`output_dir` 在运行前解析，只能读取输入。
+
+这是不提供兼容适配的接口变更：裸模块代码改为函数，源码中的输入插值改为 `args`；完整引用不再强制转成字符串。Python 步骤实现改用 `StepContext.runtime`/`inputs` 和 `StepResult.output`、`control`、`diagnostics`，移除原 `variables` 和 `StepResult.data`。可直接运行[离线示例](example/public/runtime-results.yaml)。
 
 ### 编写 Flow
 
@@ -152,7 +173,8 @@ steps:
 | `check`、`uncheck` | `selector` | 控制复选框 |
 | `save-state`、`load-state` | `file` | 复用已认证的浏览器状态 |
 | `if`、`loop` | 条件或迭代配置 | 表达分支和重复操作 |
-| `evaluate`、`scroll`、`set-viewport` | 各步骤参数 | 执行页面脚本或调整视口 |
+| `evaluate` | `script`，可选 `args` 和 `save_as` | 执行页面函数并传递 JSON 数据 |
+| `scroll`、`set-viewport` | 各步骤参数 | 调整滚动位置或视口 |
 
 在编写 flow 前，先列出可用步骤或查看某一步骤的精确参数：
 

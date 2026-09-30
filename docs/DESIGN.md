@@ -1,4 +1,5 @@
 # Pomelo PW - Flow-based UI Automation Tool
+最后修改时间: 2026-09-30 13:41:27
 
 ## 项目概述
 
@@ -25,6 +26,7 @@ pomelo-pw/
 │       ├── __init__.py
 │       ├── cli.py           # CLI 入口
 │       ├── executor.py      # 流程执行器
+│       ├── runtime.py       # 运行时输入和结果快照
 │       ├── substitution.py  # 变量替换
 │       ├── config/          # 配置管理
 │       │   ├── __init__.py
@@ -87,21 +89,31 @@ class NavigateStep(BaseStep):
     )
 ```
 
-### 2. 变量替换
+### 2. 类型化输入与结果
 
-支持 `{{var}}` 语法，三级优先级：
+每次执行创建 `RuntimeContext`，分层持有输入及独立结果；data-driven 每行新建上下文。输入优先级：
 
 ```
-CLI 参数 > 步骤级变量 > 流程级变量
+CLI/API 覆盖 > 当前步骤变量 > 最近外层步骤变量 > data 行 > flow 变量
 ```
+
+`{{name}}`、`{{item.path}}`、`{{inputs.filter}}`、`{{results.records[0].id}}` 的完整引用都保留 JSON 类型；文本拼接只接受标量。字段和非负下标组成路径，不支持表达式或通用 JSONPath。输入定义可以递归引用并检测循环；已返回的数据不再次解析。`inputs`/`results` 为保留的输入根名称。普通文本用 `\{{` 转义，`${...}` 不处理。
+
+`StepContext` 共享 runtime，以 scopes 保存逐层局部变量；兄弟步骤不共享局部变量。`StepSpec.child_step_params` 标明需要延迟解析和递归校验的子步骤字段；`literal_params` 标明原文字段，如 evaluate.script。顶层及嵌套执行都走 `_execute_step()`。
+
+`StepResult.output` 为唯一公开输出，`NO_OUTPUT` 表示没有输出，区别于 null；control 为分支和循环调度，diagnostics 为 console、截图对比、状态文件等信息。`StepSpec.produces_output` 声明能否使用 `save_as`。执行前捕获旧结果读取快照并清除待写绑定，成功重试结束后仅发布最终 JSON 快照；失败保持绑定缺失。
+
+`evaluate` 只接受同步或 async 函数表达式，args 是单个结构化 JSON 载荷。统一的浏览器包装器读取 script、args 和 hasArgs，再按有无参数调用函数；不拼接业务数据到源码。返回前检查 JSON 数据，Python 再校验和复制；console 监听器在 finally 中移除。无参数与显式 null 不同，不注入模块脚本，不改写末尾 return。
+
+Python 调用迁移到 `StepContext.runtime`/`inputs` 及 `StepResult.output`/`control`/`diagnostics`；旧 data 和变量快照接口不保留适配。YAML 源码插值改为 args，裸脚本改为函数；CLI 覆盖现在统一高于行和局部输入。
 
 ### 3. 流程执行
 
 `FlowExecutor` 负责加载、校验、执行流程：
 
 - 加载 YAML 流程文件
-- 校验步骤参数
-- 变量替换
+- 递归校验步骤结构、局部输入及结果绑定声明
+- 执行时解析参数；子流程及函数源码保持原文
 - 逐步执行并收集结果
 
 ---
@@ -134,7 +146,7 @@ CLI 参数 > 步骤级变量 > 流程级变量
 | `select` | `selector`，`value`、`label` 或 `index` 三选一 | 按 HTML value、可见文本或从零开始的选项序号选择下拉选项 |
 | `check` | `selector` | 勾选复选框 |
 | `uncheck` | `selector` | 取消勾选 |
-| `evaluate` | `script` | 执行 JavaScript |
+| `evaluate` | `script` | 执行函数表达式，可用 args 传参、save_as 绑定 JSON 输出 |
 | `set-viewport` | - | 设置视口 |
 
 `select` 的 `value` 对应 option 的 HTML `value` 属性；`label` 对应用户可见的精确选项文本；`index` 对应从零开始的选项序号。三者必须且只能提供一个。

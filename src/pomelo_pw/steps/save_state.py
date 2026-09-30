@@ -39,5 +39,5 @@ class SaveStateStep(BaseStep):
         return StepResult(
             success=True,
             message=f"Browser state saved to: {file_path}",
-            data={"file": str(file_path), "cookies_count": len(storage_state.get("cookies", []))},
+            diagnostics={"file": str(file_path), "cookies_count": len(storage_state.get("cookies", []))},
         )

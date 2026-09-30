@@ -84,7 +84,7 @@ class TestBrowserLifecycle:
                 flow={"name": "test"},
                 flow_path=MagicMock(stem="test"),
                 steps=[],
-                global_vars={},
+                overrides={},
                 output=MagicMock(),
                 start_time=0,
             )

@@ -1,0 +1,35 @@
+name: runtime-results
+description: Pass typed browser results into subsequent steps without page storage.
+output_dir: "output/runtime-results"
+headless: false
+
+variables:
+  tag: local
+
+steps:
+  - type: evaluate
+    script: "() => [{id: 'a', enabled: false, count: 0, note: null}]"
+    save_as: records
+
+  - type: if
+    condition: "url_contains: about:blank"
+    then:
+      - type: evaluate
+        args:
+          record: "{{results.records[0]}}"
+          tag: "{{inputs.tag}}"
+        script: |
+          async ({record, tag}) => {
+            return {...record, tag, literal: '{{not_a_reference}}'};
+          }
+        save_as: selected
+
+  - type: evaluate
+    args: "{{results.selected}}"
+    script: |
+      (record) => {
+        if (record.id !== 'a' || record.enabled !== false || record.count !== 0 || record.note !== null) {
+          throw new Error('Typed result values were not preserved');
+        }
+        return record;
+      }

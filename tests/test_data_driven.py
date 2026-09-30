@@ -10,6 +10,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from pomelo_pw.executor import FlowExecutor
+from pomelo_pw.runtime import RuntimeContext
+from pomelo_pw.steps.base import StepContext, StepResult
+from pomelo_pw.steps.evaluate import EvaluateStep
 
 
 def _make_browser() -> MagicMock:
@@ -64,7 +67,14 @@ class TestDataDrivenExpansion:
         received_outputs: list[Path] = []
 
         async def fake_run_once(
-            browser: Any, flow: Any, flow_path: Any, steps: Any, global_vars: Any, output: Path, start_time: Any
+            browser: Any,
+            flow: Any,
+            flow_path: Any,
+            steps: Any,
+            overrides: Any,
+            output: Path,
+            start_time: Any,
+            row_inputs: dict[str, Any],
         ) -> dict[str, Any]:
             received_outputs.append(output)
             return _ok_result()
@@ -82,7 +92,7 @@ class TestDataDrivenExpansion:
                 flow={"name": "test"},
                 flow_path=Path("test.yaml"),
                 steps=[],
-                base_vars={},
+                overrides={},
                 output=tmp_path,
                 headless=True,
                 data_rows=data_rows,
@@ -99,7 +109,14 @@ class TestDataDrivenExpansion:
         received_outputs: list[Path] = []
 
         async def fake_run_once(
-            browser: Any, flow: Any, flow_path: Any, steps: Any, global_vars: Any, output: Path, start_time: Any
+            browser: Any,
+            flow: Any,
+            flow_path: Any,
+            steps: Any,
+            overrides: Any,
+            output: Path,
+            start_time: Any,
+            row_inputs: dict[str, Any],
         ) -> dict[str, Any]:
             received_outputs.append(output)
             return _ok_result()
@@ -114,7 +131,7 @@ class TestDataDrivenExpansion:
                 flow={"name": "test"},
                 flow_path=Path("test.yaml"),
                 steps=[],
-                base_vars={},
+                overrides={},
                 output=tmp_path,
                 headless=True,
                 data_rows=data_rows,
@@ -125,8 +142,8 @@ class TestDataDrivenExpansion:
         assert received_outputs[1] == tmp_path / "row-2"
 
     @pytest.mark.asyncio
-    async def test_row_vars_merged_with_base_vars(self, tmp_path: Path) -> None:
-        """Row data is merged with base vars; row takes precedence on conflict."""
+    async def test_row_vars_merged_with_flow_inputs(self, tmp_path: Path) -> None:
+        """Row data is merged with flow inputs; row takes precedence on conflict."""
         executor = FlowExecutor()
         received_vars: list[dict[str, Any]] = []
 
@@ -135,25 +152,26 @@ class TestDataDrivenExpansion:
             flow: Any,
             flow_path: Any,
             steps: Any,
-            global_vars: dict[str, Any],
+            overrides: dict[str, Any],
             output: Any,
             start_time: Any,
+            row_inputs: dict[str, Any],
         ) -> dict[str, Any]:
-            received_vars.append(dict(global_vars))
+            received_vars.append(RuntimeContext(flow.get("variables", {}), overrides, row_inputs).effective_inputs())
             return _ok_result()
 
         data_rows = [{"username": "alice", "env": "staging"}]
-        base_vars = {"env": "prod", "base_url": "https://example.com"}
+        flow_inputs = {"env": "prod", "base_url": "https://example.com"}
 
         with (
             patch.object(executor, "_launch_browser", new=AsyncMock(return_value=_make_browser())),
             patch.object(executor, "_run_once", side_effect=fake_run_once),
         ):
             await executor._run_data_driven(
-                flow={"name": "test"},
+                flow={"name": "test", "variables": flow_inputs},
                 flow_path=Path("test.yaml"),
                 steps=[],
-                base_vars=base_vars,
+                overrides={},
                 output=tmp_path,
                 headless=True,
                 data_rows=data_rows,
@@ -170,7 +188,14 @@ class TestDataDrivenExpansion:
         call_idx = 0
 
         async def fake_run_once(
-            browser: Any, flow: Any, flow_path: Any, steps: Any, global_vars: Any, output: Any, start_time: Any
+            browser: Any,
+            flow: Any,
+            flow_path: Any,
+            steps: Any,
+            overrides: Any,
+            output: Any,
+            start_time: Any,
+            row_inputs: dict[str, Any],
         ) -> dict[str, Any]:
             nonlocal call_idx
             call_idx += 1
@@ -186,7 +211,7 @@ class TestDataDrivenExpansion:
                 flow={"name": "test"},
                 flow_path=Path("test.yaml"),
                 steps=[],
-                base_vars={},
+                overrides={},
                 output=tmp_path,
                 headless=True,
                 data_rows=data_rows,
@@ -207,7 +232,14 @@ class TestDataDrivenExpansion:
         call_count = 0
 
         async def fake_run_once(
-            browser: Any, flow: Any, flow_path: Any, steps: Any, global_vars: Any, output: Any, start_time: Any
+            browser: Any,
+            flow: Any,
+            flow_path: Any,
+            steps: Any,
+            overrides: Any,
+            output: Any,
+            start_time: Any,
+            row_inputs: dict[str, Any],
         ) -> dict[str, Any]:
             nonlocal call_count
             call_count += 1
@@ -223,7 +255,7 @@ class TestDataDrivenExpansion:
                 flow={"name": "test", "on_error": "stop"},
                 flow_path=Path("test.yaml"),
                 steps=[],
-                base_vars={},
+                overrides={},
                 output=tmp_path,
                 headless=True,
                 data_rows=data_rows,
@@ -240,7 +272,14 @@ class TestDataDrivenExpansion:
         call_count = 0
 
         async def fake_run_once(
-            browser: Any, flow: Any, flow_path: Any, steps: Any, global_vars: Any, output: Any, start_time: Any
+            browser: Any,
+            flow: Any,
+            flow_path: Any,
+            steps: Any,
+            overrides: Any,
+            output: Any,
+            start_time: Any,
+            row_inputs: dict[str, Any],
         ) -> dict[str, Any]:
             nonlocal call_count
             call_count += 1
@@ -256,7 +295,7 @@ class TestDataDrivenExpansion:
                 flow={"name": "test", "on_error": "continue"},
                 flow_path=Path("test.yaml"),
                 steps=[],
-                base_vars={},
+                overrides={},
                 output=tmp_path,
                 headless=True,
                 data_rows=data_rows,
@@ -278,3 +317,42 @@ class TestRunFlowDataDrivenRouting:
         }
         errors = executor.validate_flow(flow)
         assert len(errors) == 0
+
+    async def test_each_row_has_isolated_results_and_cli_wins(self, tmp_path: Path) -> None:
+        executor = FlowExecutor()
+        seen: list[dict[str, Any]] = []
+        runtimes: list[RuntimeContext] = []
+
+        async def execute(self: EvaluateStep, context: StepContext, params: dict[str, Any]) -> StepResult:
+            assert context.runtime.snapshot_results() == {}
+            runtimes.append(context.runtime)
+            seen.append(params["args"])
+            return StepResult(success=True, output=params["args"])
+
+        with (
+            patch.object(executor, "_launch_browser", new=AsyncMock(return_value=_make_browser())),
+            patch.object(EvaluateStep, "execute", new=execute),
+        ):
+            result = await executor._run_data_driven(
+                flow={"variables": {"key": "flow"}},
+                flow_path=Path("test.yaml"),
+                steps=[
+                    {
+                        "type": "evaluate",
+                        "script": "x => x",
+                        "save_as": "record",
+                        "args": {"key": "{{key}}", "row": "{{row}}"},
+                        "variables": {"key": "step"},
+                    }
+                ],
+                overrides={"key": "cli"},
+                output=tmp_path,
+                headless=True,
+                data_rows=[{"key": "row", "row": 1}, {"key": "row", "row": 2}],
+                start_time=time.time(),
+            )
+        assert result["success"]
+        assert seen == [{"key": "cli", "row": 1}, {"key": "cli", "row": 2}]
+        assert runtimes[0] is not runtimes[1]
+        assert runtimes[0].snapshot_results() == {"record": seen[0]}
+        assert runtimes[1].snapshot_results() == {"record": seen[1]}

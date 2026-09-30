@@ -170,9 +170,9 @@ class TestConditionalStepExecute:
             },
         )
         assert result.success is True
-        assert result.data is not None
-        assert result.data["branch"] == "then"
-        assert result.data["steps"] == then_steps
+        assert result.control is not None
+        assert result.control["branch"] == "then"
+        assert result.control["steps"] == then_steps
 
     @pytest.mark.asyncio
     async def test_else_branch_taken(self) -> None:
@@ -189,9 +189,9 @@ class TestConditionalStepExecute:
             },
         )
         assert result.success is True
-        assert result.data is not None
-        assert result.data["branch"] == "else"
-        assert result.data["steps"] == else_steps
+        assert result.control is not None
+        assert result.control["branch"] == "else"
+        assert result.control["steps"] == else_steps
 
     @pytest.mark.asyncio
     async def test_skip_when_false_no_else(self) -> None:
@@ -206,8 +206,8 @@ class TestConditionalStepExecute:
             },
         )
         assert result.success is True
-        assert result.data is not None
-        assert result.data["branch"] == "skip"
+        assert result.control is not None
+        assert result.control["branch"] == "skip"
 
     @pytest.mark.asyncio
     async def test_condition_error_returns_failure(self) -> None:

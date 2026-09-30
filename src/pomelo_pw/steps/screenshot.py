@@ -71,7 +71,7 @@ class ScreenshotStep(BaseStep):
                 return StepResult(
                     success=True,
                     message=f"Screenshot saved (baseline not found): {rel_path}",
-                    data={"file": str(file_path), "baseline_missing": True},
+                    diagnostics={"file": str(file_path), "baseline_missing": True},
                 )
 
             # Perform comparison
@@ -99,7 +99,7 @@ class ScreenshotStep(BaseStep):
                     return StepResult(
                         success=False,
                         message=(f"Screenshot differs from baseline by {pct:.2f}% (threshold: {thr:.1f}%)"),
-                        data=diff_result,
+                        diagnostics=diff_result,
                     )
             else:
                 click.echo("  ✓ Screenshots match within threshold")
@@ -107,7 +107,7 @@ class ScreenshotStep(BaseStep):
             return StepResult(
                 success=True,
                 message=f"Screenshot saved and compared: {diff_percentage:.2f}% difference",
-                data=diff_result,
+                diagnostics=diff_result,
             )
 
         # No baseline comparison

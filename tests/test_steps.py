@@ -2,14 +2,16 @@
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from pomelo_pw.runtime import RuntimeContext
 from pomelo_pw.steps import get_step, list_steps
 from pomelo_pw.steps.base import StepContext
 from pomelo_pw.steps.click import ClickStep
-from pomelo_pw.steps.evaluate import EvaluateStep
+from pomelo_pw.steps.evaluate import CALL_FUNCTION, EvaluateStep
 from pomelo_pw.steps.fill import FillStep
 from pomelo_pw.steps.navigate import NavigateStep
 from pomelo_pw.steps.screenshot import ScreenshotStep
@@ -161,7 +163,7 @@ class TestClickStepExecution:
         page = MagicMock()
         page.click = AsyncMock()
         page.wait_for_load_state = AsyncMock()
-        context = StepContext(page=page, variables={}, output_dir=Path("/tmp"), screenshots=[])
+        context = StepContext(page=page, runtime=RuntimeContext(), output_dir=Path("/tmp"), screenshots=[])
 
         result = await ClickStep().execute(context, {"selector": "#button", "wait_after": "network_idle"})
 
@@ -185,7 +187,7 @@ class TestSelectStep:
     async def test_selects_an_option_by_visible_label(self) -> None:
         page = MagicMock()
         page.select_option = AsyncMock()
-        context = StepContext(page=page, variables={}, output_dir=Path("/tmp"), screenshots=[])
+        context = StepContext(page=page, runtime=RuntimeContext(), output_dir=Path("/tmp"), screenshots=[])
 
         result = await SelectStep().execute(context, {"selector": "#kind", "label": "教材"})
 
@@ -196,7 +198,7 @@ class TestSelectStep:
     async def test_selects_an_option_by_zero_based_index(self) -> None:
         page = MagicMock()
         page.select_option = AsyncMock()
-        context = StepContext(page=page, variables={}, output_dir=Path("/tmp"), screenshots=[])
+        context = StepContext(page=page, runtime=RuntimeContext(), output_dir=Path("/tmp"), screenshots=[])
 
         result = await SelectStep().execute(context, {"selector": "#kind", "index": 2})
 
@@ -216,7 +218,7 @@ class TestEvaluateStepExecution:
         def on(event: str, callback: Callable[[object], None]) -> None:
             listeners[event] = callback
 
-        async def evaluate(script: str, arg: str | None = None) -> str:
+        async def evaluate(script: str, arg: dict[str, Any]) -> str:
             message = MagicMock()
             message.type = "log"
             message.text = "hello"
@@ -226,39 +228,42 @@ class TestEvaluateStepExecution:
         page.on.side_effect = on
         page.evaluate = AsyncMock(side_effect=evaluate)
         page.remove_listener = MagicMock()
-        context = StepContext(page=page, variables={}, output_dir=Path("/tmp"), screenshots=[])
+        context = StepContext(page=page, runtime=RuntimeContext(), output_dir=Path("/tmp"), screenshots=[])
 
-        result = await EvaluateStep().execute(context, {"script": "console.log('hello'); return 'ok'"})
+        script = "() => {console.log('hello'); return 'ok';}"
+        result = await EvaluateStep().execute(context, {"script": script})
 
         assert result.success
-        assert result.data["result"] == "ok"
-        assert result.data["console"] == ["log: hello"]
+        assert result.output == "ok"
+        assert result.diagnostics["console"] == ["log: hello"]
         assert 'result="ok"' in result.message
         assert 'console=["log: hello"]' in result.message
         page.evaluate.assert_awaited_once()
         evaluate_script, evaluate_arg = page.evaluate.await_args.args
-        assert "type = 'module'" in evaluate_script
-        assert "__pomeloEvaluateResult = 'ok';" in evaluate_arg
+        assert evaluate_script == CALL_FUNCTION
+        assert evaluate_arg == {"script": script, "hasArgs": False, "args": None}
         page.remove_listener.assert_called_once()
 
-    def test_prepare_module_script_supports_top_level_await(self) -> None:
-        """Test module script preparation keeps top-level await intact."""
-        script = "const response = await fetch('/api');\nreturn await response.json();"
+    @pytest.mark.parametrize("args", [None, [False, 0], {"text": "quote'\n\\{{literal}} ${host}"}])
+    async def test_structured_args_remain_separate_from_source(self, args: Any) -> None:
+        page = MagicMock()
+        page.evaluate = AsyncMock(return_value=args)
+        context = StepContext(page=page, runtime=RuntimeContext(), output_dir=Path("/tmp"), screenshots=[])
+        script = "async (payload) => payload"
+        result = await EvaluateStep().execute(context, {"script": script, "args": args})
+        assert result.output == args
+        page.evaluate.assert_awaited_once_with(CALL_FUNCTION, {"script": script, "hasArgs": True, "args": args})
 
-        module_script = EvaluateStep()._prepare_module_script(script)
-
-        assert "const response = await fetch('/api');" in module_script
-        assert "__pomeloEvaluateResult = await response.json();" in module_script
-        assert "return await response.json();" not in module_script
-
-    def test_function_expression_evaluates_directly(self) -> None:
-        """Test existing function expressions are still passed directly to Playwright."""
-        step = EvaluateStep()
-
-        assert step._is_function_expression("() => 1")
-        assert step._is_function_expression("function () { return 1; }")
-        assert step._is_function_expression("async function () { return 1; }")
-        assert not step._is_function_expression("return 1;")
+    @pytest.mark.parametrize("response", [ValueError("JS error"), float("nan"), object()])
+    async def test_listener_removed_when_execution_or_output_fails(self, response: Any) -> None:
+        page = MagicMock()
+        page.evaluate = (
+            AsyncMock(side_effect=response) if isinstance(response, Exception) else AsyncMock(return_value=response)
+        )
+        context = StepContext(page=page, runtime=RuntimeContext(), output_dir=Path("/tmp"), screenshots=[])
+        with pytest.raises(ValueError):
+            await EvaluateStep().execute(context, {"script": "() => null"})
+        page.remove_listener.assert_called_once_with("console", page.on.call_args.args[1])
 
 
 class TestFillStepValidation:
@@ -284,6 +289,12 @@ class TestFillStepValidation:
             }
         )
         assert len(errors) == 0
+
+    @pytest.mark.parametrize("value", [[], {}, 0, False])
+    def test_typed_references_do_not_coerce_text_values(self, value: Any) -> None:
+        assert "value must resolve to a string" in FillStep.validate_resolved_params(
+            {"selector": "#input", "value": value}
+        )
 
 
 class TestWaitStepValidation:

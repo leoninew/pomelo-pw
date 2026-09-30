@@ -79,7 +79,11 @@ def run(
         click.echo(json.dumps(result, indent=2, ensure_ascii=False))
     else:
         if result.get("success"):
-            msg = f"Completed: {result['steps_executed']} steps, {len(result['screenshots'])} screenshots"
+            if result.get("data_driven"):
+                completed = f"{result['rows_passed']}/{result['rows_total']} rows"
+            else:
+                completed = f"{result['steps_executed']} steps"
+            msg = f"Completed: {completed}, {len(result['screenshots'])} screenshots"
             click.echo(msg)
         else:
             click.echo(f"Failed: {result.get('error', 'Unknown error')}", err=True)
@@ -160,6 +164,8 @@ def spec(step_type: str) -> None:
     click.echo("\nOptional parameters:")
     for p, default in spec.optional_params.items():
         click.echo(f"  - {p}: {default}")
+    if spec.produces_output:
+        click.echo("  - save_as: result name (ASCII identifier)")
 
 
 @cli.command(context_settings={"help_option_names": ["-h", "--help"]})

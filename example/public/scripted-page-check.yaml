@@ -1,5 +1,5 @@
 name: scripted-page-check
-description: Extract page evidence with JavaScript without colliding with {{variable}} syntax.
+description: Extract page evidence with a browser function and save its result.
 output_dir: "output"
 headless: false
 
@@ -12,9 +12,12 @@ steps:
 
   - type: evaluate
     script: |
-      const title = document.title;
-      const heading = document.querySelector('h1')?.textContent?.trim();
-      return {title, heading, url: window.location.href};
+      () => {
+        const title = document.title;
+        const heading = document.querySelector('h1')?.textContent?.trim() ?? null;
+        return {title, heading, url: window.location.href};
+      }
+    save_as: evidence
 
   - type: screenshot
     file: "scripted-page-check/evidence.png"

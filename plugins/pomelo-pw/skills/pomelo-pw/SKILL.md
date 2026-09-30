@@ -53,19 +53,31 @@ steps:
 
 ### Variable Syntax
 
-Use `{{ }}` — doesn't conflict with JS/Shell template literals:
+Complete references preserve JSON types: `{{name}}`, `{{item.path}}`, `{{inputs.filter}}`, and `{{results.records[0].id}}`. Paths support identifier fields and nonnegative array indexes. Embedded references accept scalar text only. Use `\{{` for literal template openings. `inputs` and `results` are reserved input names.
+
+Input precedence: CLI/API overrides > current step variables > enclosing variables > data row > flow variables. CLI `--var` values remain strings.
+
+Pass data into browser functions through `args`; script source is literal:
 ```yaml
 - type: evaluate
-  script: "const token = '{{api_token}}'; fetch(`/api?token=${token}`)"
+  args:
+    token: "{{api_token}}"
+  script: "async ({token}) => { const response = await fetch(`/api?token=${encodeURIComponent(token)}`); return await response.json(); }"
+  save_as: response
 ```
 
 `${ }` is reserved for host languages such as JavaScript and is not processed as flow variable syntax.
+
+`save_as` binds successful public JSON output (currently supported by evaluate); read it with `{{results.response}}`. Results are shared by nested steps and isolated between data rows. Child parameters resolve at execution; child local variables do not leak into siblings. Input definitions may reference other inputs; cycles fail. Results stay opaque, even if strings contain template syntax. Rebinding replaces a result; a failed write clears the old binding, while its arguments may read the previous snapshot.
+
+`evaluate.script` must be a synchronous or async function expression and explicitly return JSON data; use `return null` for no data. Omitted args passes no arguments; explicit null passes one null. Unsupported values, nonfinite numbers, and circular data fail. Migrate bare module bodies to functions and source interpolation to args; no compatibility adapters are provided.
 
 ### Output Directory
 
 Screenshots save to `./<flow-name>/` by default (derived from filename).
 - `example/my-test.yaml` → `./my-test/`
 - Set top-level `output_dir` in the flow; it supports `{{variable}}` substitution.
+- `output_dir` resolves before execution and cannot read results.
 - Relative `output_dir` values are resolved from the command working directory.
 - Override a flow value with `-o /custom/path`.
 - Set top-level boolean `headless` to run without a visible browser; it defaults to `false`.
@@ -86,7 +98,7 @@ Screenshots save to `./<flow-name>/` by default (derived from filename).
 | `hover` | `selector` | Hover over element |
 | `select` | `selector`, one of `value` / `label` / `index` | Select dropdown option |
 | `check` / `uncheck` | `selector` | Toggle checkbox |
-| `evaluate` | `script` | Execute JavaScript |
+| `evaluate` | `script`, optional `args`, `save_as` | Execute a browser function with JSON input/output |
 | `set-viewport` | `width`, `height` | Set viewport size |
 | `save-state` | `file` | Save cookies + localStorage |
 | `load-state` | `file` | Restore saved auth state |
@@ -270,7 +282,7 @@ steps:
 
 - Each row runs all steps independently
 - Output goes to `<output>/<_label>/` or `<output>/row-N/`
-- Row variables override `variables`
+- Row variables override flow `variables`; CLI/API overrides remain highest priority
 - Result includes `rows_total`, `rows_passed`, `rows_failed`
 
 ## Error Context

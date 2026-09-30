@@ -17,6 +17,14 @@ def test_version_reports_package_version() -> None:
     assert result.output == f"cli, version {__version__}\n"
 
 
+def test_evaluate_spec_exposes_structured_args_and_binding() -> None:
+    result = CliRunner().invoke(cli, ["spec", "evaluate"])
+    assert result.exit_code == 0
+    assert "args:" in result.output
+    assert "save_as:" in result.output
+    assert "save_as:" not in CliRunner().invoke(cli, ["spec", "click"]).output
+
+
 class TestBrowserCommands:
     """Tests for interactive browser command dispatch."""
 
@@ -61,6 +69,26 @@ class TestBrowserCommands:
 
 class TestRunCommand:
     """Tests for flow runtime option dispatch."""
+
+    def test_run_reports_data_driven_summary(self) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            Path("sample.yaml").write_text("steps: []\n", encoding="utf-8")
+            with patch("pomelo_pw.cli.FlowExecutor") as executor_class:
+                executor_class.return_value.run_flow = AsyncMock(
+                    return_value={
+                        "success": True,
+                        "data_driven": True,
+                        "rows_total": 3,
+                        "rows_passed": 3,
+                        "rows_failed": 0,
+                        "screenshots": ["homepage.png", "a.png", "b.png"],
+                    }
+                )
+                result = runner.invoke(cli, ["run", "sample.yaml"])
+
+        assert result.exit_code == 0
+        assert result.output == "Completed: 3/3 rows, 3 screenshots\n"
 
     def test_run_leaves_output_unset_for_flow_configuration(self) -> None:
         """Flow output_dir remains available when the CLI option is omitted."""

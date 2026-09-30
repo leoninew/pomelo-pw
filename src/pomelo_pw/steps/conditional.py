@@ -22,6 +22,7 @@ class ConditionalStep(BaseStep):
             "else": None,
         },
         aliases=["conditional"],
+        child_step_params=("then", "else"),
     )
 
     async def execute(self, context: StepContext, params: dict[str, Any]) -> StepResult:
@@ -44,7 +45,7 @@ class ConditionalStep(BaseStep):
             return StepResult(
                 success=True,
                 message=f"Condition true: {condition}",
-                data={"branch": "then", "steps": then_steps},
+                control={"branch": "then", "steps": then_steps},
             )
         else:
             if else_steps:
@@ -52,14 +53,14 @@ class ConditionalStep(BaseStep):
                 return StepResult(
                     success=True,
                     message=f"Condition false: {condition}",
-                    data={"branch": "else", "steps": else_steps},
+                    control={"branch": "else", "steps": else_steps},
                 )
             else:
                 click.echo(f"Condition '{condition}' is false, skipping")
                 return StepResult(
                     success=True,
                     message=f"Condition false, no else branch: {condition}",
-                    data={"branch": "skip"},
+                    control={"branch": "skip"},
                 )
 
     async def _evaluate_condition(self, page: Page, condition: str) -> bool:

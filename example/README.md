@@ -27,7 +27,18 @@ pomelo-pw run example/public/data-driven-pages.yaml --var base_url=https://stagi
 | `public/incremental-content.yaml` | Nested conditionals while loading more content | Yes, public demo site |
 | `public/data-driven-pages.yaml` | Labeled data-driven runs | Yes |
 | `public/scripted-page-check.yaml` | In-page JavaScript evaluation | Yes |
+| `public/runtime-results.yaml` | Typed results, structured args, nested result references | Yes, offline |
 | `public/visual-regression.yaml` | Screenshot baseline comparison | Yes, with Pillow |
+
+## Runtime Results
+
+`public/runtime-results.yaml` uses `about:blank` and needs no external service. Run the workspace version to try the new result contract:
+
+```bash
+uv run --locked --no-sync pomelo-pw run example/public/runtime-results.yaml --headless -v
+```
+
+`evaluate.script` must be a synchronous or async function expression. Pass data through `args` and bind its JSON return value with `save_as`; script source is kept literal. Bare module bodies and template substitution inside script source must be migrated to this contract.
 
 ## Browser Interactions
 

@@ -111,7 +111,28 @@ pomelo-pw run flow.yaml -o .pomelo-pw/artifacts/manual-run
 pomelo-pw validate flow.yaml
 ```
 
-Variables use `{{name}}`; CLI values take precedence over step-level values, which take precedence over flow-level values. The `${name}` form is preserved for JavaScript and shell template literals.
+Input precedence is CLI/API overrides > current step variables > enclosing step variables > data row > flow variables. `--var key=value` remains a text input. `inputs` and `results` are reserved input names.
+
+### Runtime Data
+
+Complete references preserve JSON types: `{{name}}`, `{{item.path}}`, `{{inputs.filter}}`, and `{{results.records[0].id}}`. References embedded in text accept scalars only (`false`, `0`, and `null` use JSON spelling); objects and arrays cannot be interpolated into text. Paths support identifier fields and nonnegative array indexes. Use `\{{` for a literal template opening; `${name}` stays untouched.
+
+```yaml
+steps:
+  - type: evaluate
+    script: "() => [{id: 'a', enabled: false}]"
+    save_as: records
+  - type: evaluate
+    args: "{{results.records[0]}}"
+    script: "async (record) => ({id: record.id, enabled: record.enabled})"
+    save_as: selected
+```
+
+`evaluate.script` is a synchronous or async function expression, kept as literal source. Pass one JSON payload through `args`; omitted args calls the function with no arguments, while `args: null` passes one null argument. Return a JSON value explicitly (use `return null` when no data is needed). Unsupported values, nonfinite numbers, and circular data fail.
+
+Only output-producing steps support `save_as` (currently `evaluate`). A successful step publishes a copied result; another successful write replaces it. During replacement, arguments can read the previous value, but a failed attempt leaves the binding absent. Results are shared by nested steps and isolated between data rows. Child parameters resolve when the child executes; child variables do not leak into siblings. Returned strings are data and are never reinterpreted as templates. `output_dir` resolves before execution and can only use inputs.
+
+This is a breaking contract change with no compatibility adapters. Migrate bare module bodies to functions and source interpolation to `args`. Complete references no longer force values to strings. Python step implementations use `StepContext.runtime`/`inputs` and `StepResult.output`, `control`, and `diagnostics`; `variables` and `StepResult.data` are removed. See [the offline example](example/public/runtime-results.yaml).
 
 ### Author Flows
 
@@ -152,7 +173,8 @@ steps:
 | `check`, `uncheck` | `selector` | Control checkboxes |
 | `save-state`, `load-state` | `file` | Reuse authenticated browser state |
 | `if`, `loop` | condition or iteration settings | Model branches and repeated actions |
-| `evaluate`, `scroll`, `set-viewport` | step-specific parameters | Run browser-side scripts or adjust the viewport |
+| `evaluate` | `script`, optional `args` and `save_as` | Run a browser function and pass JSON data |
+| `scroll`, `set-viewport` | step-specific parameters | Adjust scroll position or viewport |
 
 List the available steps or inspect any step's exact parameters before writing a flow:
 

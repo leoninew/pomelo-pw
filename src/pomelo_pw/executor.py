@@ -14,9 +14,10 @@ from playwright.async_api import async_playwright
 from pomelo_pw.browser import BrowserLifecycle
 from pomelo_pw.config import load_app_config
 from pomelo_pw.error_context import ErrorContextCollector
+from pomelo_pw.runtime import NO_OUTPUT, RuntimeContext, snapshot_json, validate_inputs
 from pomelo_pw.steps import get_step
 from pomelo_pw.steps.base import BaseStep, StepContext, StepResult
-from pomelo_pw.substitution import substitute_vars
+from pomelo_pw.substitution import UndefinedVariableError, substitute_vars
 
 
 class FlowExecutor:
@@ -71,25 +72,23 @@ class FlowExecutor:
                         self._log(f"[{step_num}/{total_steps}] Succeeded on attempt {attempt + 1}")
 
                     # Handle conditional and loop steps
-                    if result.data:
+                    if result.control:
                         # Conditional step
-                        if "branch" in result.data:
-                            branch = result.data["branch"]
+                        if "branch" in result.control:
+                            branch = result.control["branch"]
                             if branch in ("then", "else"):
-                                nested_steps = result.data["steps"]
+                                nested_steps = result.control["steps"]
                                 await self._execute_steps(
                                     steps=nested_steps,
                                     context=step_context,
-                                    global_vars=step_context.variables,
                                     prefix=f"{step_num}.",
                                 )
 
                         # Loop step
-                        elif "type" in result.data and result.data["type"] in ("times", "while"):
+                        elif result.control.get("type") in ("times", "while"):
                             await self._execute_loop(
-                                loop_data=result.data,
+                                loop_data=result.control,
                                 context=step_context,
-                                global_vars=step_context.variables,
                                 prefix=f"{step_num}.",
                             )
 
@@ -124,11 +123,64 @@ class FlowExecutor:
 
         return StepResult(success=False, message="Unknown error in retry logic")
 
+    async def _execute_step(
+        self,
+        step: dict[str, Any],
+        context: StepContext,
+        step_num: str,
+        total_steps: int,
+    ) -> StepResult:
+        """Prepare one lexical scope, execute, and publish only successful output."""
+        results = context.runtime.snapshot_results()
+        save_as = step.get("save_as")
+        if isinstance(save_as, str):
+            context.runtime.invalidate(save_as)
+
+        step_class = get_step(step["type"])
+        if step_class is None:
+            raise ValueError(f"Unknown step type: {step['type']}")
+        errors = step_class.validate_params(step)
+        if errors:
+            raise ValueError("; ".join(errors))
+
+        step_context = StepContext(
+            page=context.page,
+            runtime=context.runtime,
+            output_dir=context.output_dir,
+            screenshots=context.screenshots,
+            scopes=(*context.scopes, step.get("variables", {})),
+        )
+        raw_fields = {
+            "type",
+            "variables",
+            "save_as",
+            *step_class.spec.child_step_params,
+            *step_class.spec.literal_params,
+        }
+        params = substitute_vars(
+            {key: value for key, value in step.items() if key not in raw_fields},
+            step_context.inputs,
+            results,
+        )
+        params.update({key: value for key, value in step.items() if key in raw_fields})
+        errors = step_class.validate_resolved_params(params)
+        if errors:
+            raise ValueError("; ".join(errors))
+
+        result = await self._execute_with_retry(step_class(), step_context, params, step_num, total_steps)
+        if result.success:
+            if result.output is not NO_OUTPUT:
+                result.output = snapshot_json(result.output)
+            if save_as is not None:
+                if result.output is NO_OUTPUT:
+                    raise ValueError(f"Step '{step['type']}' produced no output for save_as '{save_as}'")
+                context.runtime.publish(save_as, result.output)
+        return result
+
     async def _execute_steps(
         self,
         steps: list[dict[str, Any]],
         context: StepContext,
-        global_vars: dict[str, Any],
         prefix: str = "",
     ) -> None:
         """Execute a list of steps (used for conditional and loop bodies)."""
@@ -138,35 +190,7 @@ class FlowExecutor:
 
             self._log(f"[{step_num}] {step_type} begin")
 
-            # Merge step-level variables
-            step_vars = step.get("variables", {})
-            merged_vars = {**global_vars, **step_vars}
-
-            # Substitute variables in params
-            params = substitute_vars(step, merged_vars)
-
-            step_class = get_step(params["type"])
-            if step_class is None:
-                raise ValueError(f"Unknown step type: {params['type']}")
-
-            step_instance = step_class()
-
-            # Update context with merged variables
-            nested_context = StepContext(
-                page=context.page,
-                variables=merged_vars,
-                output_dir=context.output_dir,
-                screenshots=context.screenshots,
-            )
-
-            # Execute step
-            result = await self._execute_with_retry(
-                step_instance=step_instance,
-                step_context=nested_context,
-                params=params,
-                step_num=step_num,
-                total_steps=len(steps),
-            )
+            result = await self._execute_step(step, context, step_num, len(steps))
 
             if not result.success:
                 raise RuntimeError(result.message)
@@ -177,7 +201,6 @@ class FlowExecutor:
         self,
         loop_data: dict[str, Any],
         context: StepContext,
-        global_vars: dict[str, Any],
         prefix: str = "",
     ) -> None:
         """Execute loop iterations."""
@@ -191,7 +214,6 @@ class FlowExecutor:
                 await self._execute_steps(
                     steps=steps,
                     context=context,
-                    global_vars=global_vars,
                     prefix=f"{prefix}iter-{i + 1}.",
                 )
 
@@ -219,7 +241,6 @@ class FlowExecutor:
                 await self._execute_steps(
                     steps=steps,
                     context=context,
-                    global_vars=global_vars,
                     prefix=f"{prefix}iter-{iteration}.",
                 )
 
@@ -236,9 +257,25 @@ class FlowExecutor:
         flow = self.load_flow(flow_path)
         return self.validate_flow(flow)
 
-    def validate_flow(self, flow: dict[str, Any]) -> list[str]:
+    def validate_flow(self, flow: Any) -> list[str]:
         """Validate flow structure."""
         errors: list[str] = []
+
+        if not isinstance(flow, dict):
+            return ["Flow must be an object"]
+        try:
+            validate_inputs(flow.get("variables", {}))
+        except ValueError as error:
+            errors.append(f"Flow: {error}")
+        rows = flow.get("data", [])
+        if not isinstance(rows, list):
+            errors.append("Flow field 'data' must be a list")
+        else:
+            for index, row in enumerate(rows):
+                try:
+                    validate_inputs(row)
+                except ValueError as error:
+                    errors.append(f"data[{index}]: {error}")
 
         if "output_dir" in flow:
             output_dir = flow["output_dir"]
@@ -248,22 +285,30 @@ class FlowExecutor:
         if "headless" in flow and not isinstance(flow["headless"], bool):
             errors.append("Flow field 'headless' must be a boolean")
 
-        steps = flow.get("steps", [])
-        for i, step in enumerate(steps):
+        errors.extend(self._validate_steps(flow.get("steps", []), "steps"))
+        return errors
+
+    def _validate_steps(self, steps: Any, path: str) -> list[str]:
+        if not isinstance(steps, list):
+            return [f"{path}: must be a list of steps"]
+        errors: list[str] = []
+        for index, step in enumerate(steps):
+            location = f"{path}[{index}]"
+            if not isinstance(step, dict):
+                errors.append(f"{location}: step must be an object")
+                continue
             step_type = step.get("type")
             if not step_type:
-                errors.append(f"Step {i}: Missing 'type' field")
+                errors.append(f"{location}: Missing 'type' field")
                 continue
-
-            step_class = get_step(step_type)
-            if not step_class:
-                errors.append(f"Step {i}: Unknown step type '{step_type}'")
+            step_class = get_step(step_type) if isinstance(step_type, str) else None
+            if step_class is None:
+                errors.append(f"{location}: Unknown step type '{step_type}'")
                 continue
-
-            step_errors = step_class.validate_params(step)
-            for err in step_errors:
-                errors.append(f"Step {i} ({step_type}): {err}")
-
+            errors.extend(f"{location} ({step_type}): {error}" for error in step_class.validate_params(step))
+            for field in step_class.spec.child_step_params:
+                if field in step:
+                    errors.extend(self._validate_steps(step[field], f"{location}.{field}"))
         return errors
 
     def _resolve_output_dir(
@@ -279,7 +324,15 @@ class FlowExecutor:
         else:
             flow_output_dir = flow.get("output_dir")
             if isinstance(flow_output_dir, str):
-                output_dir = Path(substitute_vars({"output_dir": flow_output_dir}, variables)["output_dir"])
+                try:
+                    resolved = substitute_vars({"output_dir": flow_output_dir}, variables)["output_dir"]
+                except UndefinedVariableError as error:
+                    if error.var_name == "results" or error.var_name.startswith(("results.", "results[")):
+                        raise ValueError("output_dir cannot reference results before execution") from error
+                    raise
+                if not isinstance(resolved, str) or not resolved.strip():
+                    raise ValueError("output_dir must resolve to a non-empty string")
+                output_dir = Path(resolved)
             else:
                 output_dir = Path(flow_path.stem)
 
@@ -305,20 +358,19 @@ class FlowExecutor:
 
         click.echo(f"Loading flow: {flow_path}")
         flow = self.load_flow(flow_path)
-        steps = flow.get("steps", [])
 
         # Validate flow
         click.echo("Validating flow...")
         errors = self.validate_flow(flow)
         if errors:
             raise ValueError("Flow validation failed:\n" + "\n".join(errors))
+        steps = flow.get("steps", [])
 
-        # Build base variables: flow level + CLI override
-        flow_vars = flow.get("variables", {})
-        base_vars = {**flow_vars, **(variables or {})}
+        overrides = variables if variables is not None else {}
+        base_inputs = RuntimeContext(flow_inputs=flow.get("variables", {}), overrides=overrides).effective_inputs()
 
         # Output directory
-        output = self._resolve_output_dir(flow, flow_path, base_vars, output_dir)
+        output = self._resolve_output_dir(flow, flow_path, base_inputs, output_dir)
         output.mkdir(parents=True, exist_ok=True)
 
         resolved_headless = self._resolve_headless(flow, headless)
@@ -332,7 +384,7 @@ class FlowExecutor:
                 flow=flow,
                 flow_path=flow_path,
                 steps=steps,
-                base_vars=base_vars,
+                overrides=overrides,
                 output=output,
                 headless=resolved_headless,
                 data_rows=data_rows,
@@ -355,7 +407,7 @@ class FlowExecutor:
                     flow=flow,
                     flow_path=flow_path,
                     steps=steps,
-                    global_vars=base_vars,
+                    overrides=overrides,
                     output=output,
                     start_time=start_time,
                 )
@@ -369,7 +421,7 @@ class FlowExecutor:
         flow: dict[str, Any],
         flow_path: Path,
         steps: list[dict[str, Any]],
-        base_vars: dict[str, Any],
+        overrides: dict[str, Any],
         output: Path,
         headless: bool,
         data_rows: list[dict[str, Any]],
@@ -397,9 +449,6 @@ class FlowExecutor:
                     row_output = output / row_label
                     row_output.mkdir(parents=True, exist_ok=True)
 
-                    # Merge base vars with row data (row takes precedence)
-                    row_vars = {**base_vars, **row}
-
                     click.echo(f"\n[{row_num}/{len(data_rows)}] Running with data: {row_label}")
 
                     row_start = time.time()
@@ -408,7 +457,8 @@ class FlowExecutor:
                         flow=flow,
                         flow_path=flow_path,
                         steps=steps,
-                        global_vars=row_vars,
+                        overrides=overrides,
+                        row_inputs=row,
                         output=row_output,
                         start_time=row_start,
                     )
@@ -452,14 +502,16 @@ class FlowExecutor:
         flow: dict[str, Any],
         flow_path: Path,
         steps: list[dict[str, Any]],
-        global_vars: dict[str, Any],
+        overrides: dict[str, Any],
         output: Path,
         start_time: float,
+        row_inputs: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Execute all steps once with the given variables."""
         flow_name = flow.get("name", flow_path.stem)
         total_steps = len(steps)
         step_width = len(str(total_steps))
+        runtime = RuntimeContext(flow.get("variables", {}), overrides, row_inputs or {})
 
         context = await self.browser_lifecycle.new_context(browser)
         try:
@@ -472,6 +524,7 @@ class FlowExecutor:
 
             screenshots: list[str] = []
             failed_step: dict[str, Any] | None = None
+            step_context = StepContext(page=page, runtime=runtime, output_dir=output, screenshots=screenshots)
 
             for idx, step in enumerate(steps):
                 step_type = step.get("type", "unknown")
@@ -480,29 +533,7 @@ class FlowExecutor:
                 self._log(f"[{step_num}/{total_steps}] {step_type} begin")
 
                 try:
-                    step_vars = step.get("variables", {})
-                    merged_vars = {**global_vars, **step_vars}
-                    params = substitute_vars(step, merged_vars)
-
-                    step_class = get_step(params["type"])
-                    if step_class is None:
-                        raise ValueError(f"Unknown step type: {params['type']}")
-
-                    step_instance = step_class()
-                    step_context = StepContext(
-                        page=page,
-                        variables=merged_vars,
-                        output_dir=output,
-                        screenshots=screenshots,
-                    )
-
-                    result = await self._execute_with_retry(
-                        step_instance=step_instance,
-                        step_context=step_context,
-                        params=params,
-                        step_num=step_num,
-                        total_steps=total_steps,
-                    )
+                    result = await self._execute_step(step, step_context, step_num, total_steps)
 
                     if not result.success:
                         raise RuntimeError(result.message)

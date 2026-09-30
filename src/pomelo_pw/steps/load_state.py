@@ -77,5 +77,5 @@ class LoadStateStep(BaseStep):
         return StepResult(
             success=True,
             message=f"Browser state loaded: {cookies_count} cookies, {storage_count} localStorage items",
-            data={"file": str(file_path), "cookies_count": cookies_count, "storage_count": storage_count},
+            diagnostics={"file": str(file_path), "cookies_count": cookies_count, "storage_count": storage_count},
         )

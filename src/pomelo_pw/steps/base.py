@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from pomelo_pw.runtime import IDENTIFIER, NO_OUTPUT, JsonValue, NoOutput, RuntimeContext, validate_inputs
+
 if TYPE_CHECKING:
     from playwright.async_api import Page
 
@@ -20,6 +22,9 @@ class StepSpec:
     required_params: list[str] = field(default_factory=list)
     optional_params: dict[str, Any] = field(default_factory=dict)
     aliases: list[str] = field(default_factory=list)
+    produces_output: bool = False
+    child_step_params: tuple[str, ...] = ()
+    literal_params: tuple[str, ...] = ()
 
 
 @dataclass
@@ -27,9 +32,14 @@ class StepContext:
     """步骤执行上下文."""
 
     page: Page
-    variables: dict[str, Any]
+    runtime: RuntimeContext
     output_dir: Path
     screenshots: list[str]
+    scopes: tuple[dict[str, Any], ...] = ()
+
+    @property
+    def inputs(self) -> dict[str, Any]:
+        return self.runtime.effective_inputs(self.scopes)
 
 
 @dataclass
@@ -38,7 +48,9 @@ class StepResult:
 
     success: bool
     message: str = ""
-    data: dict[str, Any] = field(default_factory=dict)
+    output: JsonValue | NoOutput = NO_OUTPUT
+    control: dict[str, Any] = field(default_factory=dict)
+    diagnostics: dict[str, Any] = field(default_factory=dict)
 
 
 # Step registry
@@ -81,12 +93,40 @@ class BaseStep(ABC):
                 errors.append(f"Missing required parameter: {param}")
 
         all_params = set(cls.spec.required_params) | set(cls.spec.optional_params.keys())
-        all_params.update({"type", "variables", "retry", "retry_delay", "retry_on"})
+        all_params.update({"type", "variables", "retry", "retry_delay", "retry_on", "save_as"})
 
         for param in params:
             if param not in all_params:
                 errors.append(f"Unknown parameter: {param}")
 
+        if "save_as" in params:
+            name = params["save_as"]
+            if not isinstance(name, str) or not IDENTIFIER.fullmatch(name):
+                errors.append("save_as must be an ASCII identifier")
+            if not cls.spec.produces_output:
+                errors.append(f"Step '{cls.spec.name}' does not produce output")
+        if "variables" in params:
+            try:
+                validate_inputs(params["variables"])
+            except ValueError as error:
+                errors.append(str(error))
+
+        return errors
+
+    @classmethod
+    def validate_resolved_params(cls, params: dict[str, Any]) -> list[str]:
+        errors = cls.validate_params(params)
+        for key in ("selector", "url", "file"):
+            if (
+                key in params
+                and (params[key] is not None or key in cls.spec.required_params)
+                and not isinstance(params[key], str)
+            ):
+                errors.append(f"{key} must resolve to a string")
+        if cls.spec.name in ("fill", "type", "select"):
+            for key in ("value", "label"):
+                if key in params and not isinstance(params[key], str):
+                    errors.append(f"{key} must resolve to a string")
         return errors
 
     @classmethod

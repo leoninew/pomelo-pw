@@ -23,6 +23,7 @@ class LoopStep(BaseStep):
             "max_iterations": 100,  # Safety limit
         },
         aliases=["repeat", "foreach"],
+        child_step_params=("steps",),
     )
 
     async def execute(self, context: StepContext, params: dict[str, Any]) -> StepResult:
@@ -50,7 +51,7 @@ class LoopStep(BaseStep):
             return StepResult(
                 success=True,
                 message=f"Loop: {times} iterations",
-                data={"type": "times", "iterations": times, "steps": steps},
+                control={"type": "times", "iterations": times, "steps": steps},
             )
 
         elif while_condition is not None:
@@ -59,7 +60,7 @@ class LoopStep(BaseStep):
             return StepResult(
                 success=True,
                 message=f"Loop: while '{while_condition}'",
-                data={
+                control={
                     "type": "while",
                     "condition": while_condition,
                     "max_iterations": max_iterations,

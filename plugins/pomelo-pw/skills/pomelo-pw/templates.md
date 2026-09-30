@@ -1,5 +1,21 @@
 # Pomelo PW Flow Templates
 
+## Typed Runtime Results
+
+```yaml
+name: runtime-results
+steps:
+  - type: evaluate
+    script: "() => [{id: 'a', enabled: false}]"
+    save_as: records
+  - type: evaluate
+    args: "{{results.records[0]}}"
+    script: "async (record) => ({id: record.id, enabled: record.enabled})"
+    save_as: selected
+```
+
+Use args for input and result references; script source is literal and must be a function expression. Return a JSON value explicitly. Complete references retain native types, while text interpolation accepts only scalars. No bare-module or source-template compatibility path is available.
+
 ## Basic Templates
 
 ### 1. Simple Navigation and Screenshot

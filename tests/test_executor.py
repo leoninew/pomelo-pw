@@ -108,6 +108,66 @@ class TestFlowExecutorValidation:
         errors = executor.validate_flow_file(flow_path)
         assert len(errors) == 1
 
+    @pytest.mark.parametrize("save_as", ["", "a.b", "{{name}}", 1, "非标识符"])
+    def test_rejects_invalid_binding_names(self, executor: FlowExecutor, save_as: object) -> None:
+        errors = executor.validate_flow({"steps": [{"type": "evaluate", "script": "() => null", "save_as": save_as}]})
+        assert "save_as must be an ASCII identifier" in errors[0]
+
+    def test_recursive_validation_reports_nested_paths(self, executor: FlowExecutor) -> None:
+        errors = executor.validate_flow(
+            {
+                "steps": [
+                    {
+                        "type": "if",
+                        "condition": "true",
+                        "then": [
+                            {
+                                "type": "loop",
+                                "times": 1,
+                                "steps": [{"type": "click", "selector": "#ok", "save_as": "value"}],
+                            }
+                        ],
+                        "else": "invalid",
+                    }
+                ]
+            }
+        )
+        assert "steps[0].then[0].steps[0]" in errors[0]
+        assert "does not produce output" in errors[0]
+        assert "steps[0].else: must be a list" in errors[1]
+
+    def test_validation_keeps_future_results_and_business_data(self, executor: FlowExecutor) -> None:
+        assert (
+            executor.validate_flow(
+                {
+                    "steps": [
+                        {
+                            "type": "evaluate",
+                            "script": "x => x",
+                            "args": {"steps": ["{{results.future}}"]},
+                            "save_as": "record",
+                        }
+                    ]
+                }
+            )
+            == []
+        )
+
+    @pytest.mark.parametrize(
+        "flow",
+        [
+            {"variables": {"results": 1}},
+            {"data": [{"inputs": 1}]},
+            {"steps": [{"type": "evaluate", "script": "() => 1", "variables": {"inputs": 1}}]},
+        ],
+    )
+    def test_validation_rejects_reserved_input_names(self, executor: FlowExecutor, flow: dict[str, object]) -> None:
+        assert "Reserved input names" in executor.validate_flow(flow)[0]
+
+    @pytest.mark.parametrize("steps", [None, {}, [None], [{"type": []}]])
+    def test_malformed_steps_return_validation_errors(self, executor: FlowExecutor, steps: object) -> None:
+        assert executor.validate_flow({"steps": steps})
+
 
 class TestFlowExecutorVariables:
     """Tests for variable handling."""
@@ -174,6 +234,17 @@ class TestFlowExecutorVariables:
         output = executor._resolve_output_dir({}, tmp_path / "course-management.yaml", {}, None)
 
         assert output == tmp_path / "course-management"
+
+    @pytest.mark.parametrize("variables", [{"path": []}, {"path": {"id": 1}}, {"path": None}])
+    def test_output_dir_requires_a_string(self, executor: FlowExecutor, variables: dict[str, object]) -> None:
+        with pytest.raises(ValueError, match="must resolve to a non-empty string"):
+            executor._resolve_output_dir({"output_dir": "{{path}}"}, Path("test.yaml"), variables, None)
+
+    def test_output_dir_cannot_read_runtime_results(self, executor: FlowExecutor) -> None:
+        with pytest.raises(ValueError, match="cannot reference results"):
+            executor._resolve_output_dir(
+                {"output_dir": "{{path}}"}, Path("test.yaml"), {"path": "{{results.path}}"}, None
+            )
 
     @pytest.mark.parametrize(
         ("flow", "cli_headless", "expected"),

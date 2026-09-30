@@ -1,85 +1,137 @@
-"""Variable substitution module."""
+"""Typed references and scalar text interpolation."""
 
 from __future__ import annotations
 
+import json
 import re
+from copy import deepcopy
 from typing import Any
 
+from pomelo_pw.runtime import validate_inputs
 
-class UndefinedVariableError(Exception):
-    """变量未定义错误."""
+REFERENCE = re.compile(r"\\\{\{|(?<!\\)\{\{([^{}]*)\}\}")
+ROOT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+SEGMENT = re.compile(r"\.([A-Za-z_][A-Za-z0-9_]*)|\[([0-9]+)\]")
 
+
+class UndefinedVariableError(ValueError):
     def __init__(self, var_name: str) -> None:
         self.var_name = var_name
-        super().__init__(f"Variable '{var_name}' is not defined")
+        super().__init__(f"Variable or field '{var_name}' is not defined")
 
 
-class CircularReferenceError(Exception):
-    """循环引用错误."""
-
-    def __init__(self, var_name: str, chain: list[str]) -> None:
+class CircularReferenceError(ValueError):
+    def __init__(self, var_name: str, chain: tuple[str, ...]) -> None:
         self.var_name = var_name
-        self.chain = chain
-        super().__init__(f"Circular reference detected: {' -> '.join(chain)} -> {var_name}")
+        super().__init__(f"Circular reference detected: {' -> '.join((*chain, var_name))}")
 
 
-def _substitute_string(value: str, variables: dict[str, Any], visited: set[str]) -> str:
-    """替换单个字符串中的变量，只支持 {{ var }} 语法."""
-    double_brace_pattern = r"\{\{\s*(\w+)\s*\}\}"
-
-    def replace_double_brace(match: re.Match[str]) -> str:
-        var_name = match.group(1)
-        return _resolve_variable(var_name, variables, visited)
-
-    return re.sub(double_brace_pattern, replace_double_brace, value)
-
-
-def _resolve_variable(var_name: str, variables: dict[str, Any], visited: set[str]) -> str:
-    """解析变量值，支持嵌套引用."""
-    if var_name in visited:
-        raise CircularReferenceError(var_name, list(visited))
-
-    if var_name not in variables:
-        raise UndefinedVariableError(var_name)
-
-    var_value = variables[var_name]
-
-    # 如果变量值本身包含变量引用，递归替换
-    if isinstance(var_value, str) and "{{" in var_value:
-        new_visited = visited | {var_name}
-        return _substitute_string(var_value, variables, new_visited)
-
-    return str(var_value)
+def _parse_path(path: str) -> list[str | int]:
+    match = ROOT.match(path)
+    if match is None:
+        raise ValueError(f"Invalid reference path: {path!r}")
+    parts: list[str | int] = [match.group()]
+    position = match.end()
+    while position < len(path):
+        match = SEGMENT.match(path, position)
+        if match is None:
+            raise ValueError(f"Invalid reference path: {path!r}")
+        parts.append(match.group(1) if match.group(1) is not None else int(match.group(2)))
+        position = match.end()
+    return parts
 
 
-def substitute_vars(params: dict[str, Any], variables: dict[str, Any]) -> dict[str, Any]:
-    """替换参数中的所有变量引用.
+class _Resolver:
+    def __init__(self, inputs: dict[str, Any], results: dict[str, Any] | None) -> None:
+        self.inputs = inputs
+        self.results = results
 
-    支持 {{ var }} 语法，不处理 ${ var }。
+    @staticmethod
+    def _input_key(location: tuple[str | int, ...]) -> str:
+        return "inputs" + "".join(f"[{part}]" if isinstance(part, int) else f".{part}" for part in location)
 
-    Args:
-        params: 参数字典，可能包含 {{ var }} 形式的变量引用
-        variables: 变量字典
+    def reference(self, path: str, chain: tuple[str, ...], suffix: tuple[str | int, ...] = ()) -> Any:
+        parts = _parse_path(path)
+        parts.extend(suffix)
+        root = parts.pop(0)
+        if root == "results":
+            if self.results is None:
+                raise UndefinedVariableError(path)
+            return deepcopy(self._read(self.results, parts, path))
+        if root not in ("inputs", "results"):
+            parts.insert(0, root)
+        value: Any = self.inputs
+        location: tuple[str | int, ...] = ()
+        for index, part in enumerate(parts):
+            # A template alias is resolved once; its returned data stays opaque.
+            if isinstance(value, str):
+                match = REFERENCE.fullmatch(value)
+                if match is not None and match.group(1) is not None:
+                    key = self._input_key(location)
+                    if key in chain:
+                        raise CircularReferenceError(key, chain)
+                    return self.reference(match.group(1).strip(), (*chain, key), tuple(parts[index:]))
+                resolved = self.value(value, chain, location)
+                return deepcopy(self._read(resolved, parts[index:], path))
+            value = self._read(value, [part], path)
+            location = (*location, part)
+        return deepcopy(self.value(value, chain, location))
 
-    Returns:
-        替换后的参数字典
+    @staticmethod
+    def _read(value: Any, parts: list[str | int], path: str) -> Any:
+        for part in parts:
+            if isinstance(part, int):
+                if not isinstance(value, list) or part >= len(value):
+                    raise UndefinedVariableError(path)
+            elif not isinstance(value, dict) or part not in value:
+                raise UndefinedVariableError(path)
+            value = value[part]
+        return value
 
-    Raises:
-        UndefinedVariableError: 变量未定义
-        CircularReferenceError: 变量循环引用
-    """
-    result: dict[str, Any] = {}
-
-    for key, value in params.items():
-        if isinstance(value, str):
-            result[key] = _substitute_string(value, variables, set())
-        elif isinstance(value, dict):
-            result[key] = substitute_vars(value, variables)
-        elif isinstance(value, list):
-            result[key] = [
-                _substitute_string(item, variables, set()) if isinstance(item, str) else item for item in value
+    def value(
+        self,
+        value: Any,
+        chain: tuple[str, ...] = (),
+        location: tuple[str | int, ...] | None = None,
+    ) -> Any:
+        if location is not None:
+            key = self._input_key(location)
+            if key in chain:
+                raise CircularReferenceError(key, chain)
+            chain = (*chain, key)
+        if isinstance(value, dict):
+            return {
+                key: self.value(item, chain, (*location, key) if location is not None else None)
+                for key, item in value.items()
+            }
+        if isinstance(value, list):
+            return [
+                self.value(item, chain, (*location, index) if location is not None else None)
+                for index, item in enumerate(value)
             ]
-        else:
-            result[key] = value
+        if not isinstance(value, str):
+            return value
+        match = REFERENCE.fullmatch(value)
+        if match is not None and match.group(1) is not None:
+            return self.reference(match.group(1).strip(), chain)
 
-    return result
+        def replace(match: re.Match[str]) -> str:
+            if match.group(1) is None:
+                return "{{"
+            item = self.reference(match.group(1).strip(), chain)
+            if isinstance(item, (dict, list)):
+                raise ValueError("Objects and arrays cannot be interpolated into text")
+            if isinstance(item, str):
+                return item
+            return json.dumps(item, allow_nan=False, ensure_ascii=False)
+
+        return REFERENCE.sub(replace, value)
+
+
+def substitute_vars(
+    params: dict[str, Any], variables: dict[str, Any], results: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Resolve parameter containers without interpreting referenced result data."""
+    validate_inputs(variables)
+    resolver = _Resolver(variables, results)
+    return {key: resolver.value(value) for key, value in params.items()}
