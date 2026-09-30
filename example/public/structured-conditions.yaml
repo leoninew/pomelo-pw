@@ -1,0 +1,103 @@
+name: structured-conditions
+description: Combine typed data, page predicates and fresh loop results on an offline page.
+output_dir: "output/structured-conditions"
+headless: false
+
+variables:
+  target_count: 3
+
+steps:
+  - type: evaluate
+    script: |
+      () => {
+        document.body.innerHTML = '<h1>Ready</h1><p>Completed   material</p>'
+          + '<p id="count">Count: 0</p><button id="run">Run</button>'
+          + '<button class="probe" hidden>First</button><button class="probe">Second</button>';
+        return {id: 'material-1', enabled: false, status: 'ready', note: null};
+      }
+    save_as: record
+
+  - type: if
+    condition:
+      all:
+        - exists: "{{results.record.note}}"
+        - eq: ["{{results.record.enabled}}", false]
+        - in: ["{{results.record.status}}", [ready, completed]]
+        - page: {element_visible: "#run"}
+    then:
+      - type: evaluate
+        args: "{{results.record}}"
+        script: "record => ({...record, selected: true})"
+        save_as: selected
+
+  - type: if
+    condition:
+      all:
+        - exists: "{{results.absent}}"
+        - eq: ["{{results.absent.enabled}}", true]
+        - js:
+            script: "() => {throw new Error('This predicate must be skipped');}"
+    then:
+      - type: evaluate
+        script: "() => {throw new Error('This branch must be skipped');}"
+
+  - type: evaluate
+    script: "() => 0"
+    save_as: counter
+
+  - type: loop
+    while:
+      not:
+        eq: ["{{results.counter}}", "{{target_count}}"]
+    max_iterations: 5
+    steps:
+      - type: evaluate
+        args: "{{results.counter}}"
+        script: |
+          count => {
+            document.getElementById('count').textContent = `Count: ${count + 1}`;
+            return count + 1;
+          }
+        save_as: counter
+      - type: if
+        condition:
+          eq: ["{{results.counter}}", 2]
+        then:
+          - type: evaluate
+            args: "{{results.counter}}"
+            script: "count => count"
+            save_as: middle
+
+  - type: if
+    condition:
+      all:
+        - eq: ["{{results.counter}}", "{{target_count}}"]
+        - eq: ["{{results.middle}}", 2]
+        - ne: [false, 0]
+        - page: {element_hidden: ".absent"}
+        - page: {element_hidden: ".probe"}
+        - page: {text_contains: "Completed material"}
+        - js:
+            script: "function () {return arguments.length === 0;}"
+        - js:
+            script: "function (value) {return arguments.length === 1 && value === null;}"
+            args: null
+        - js:
+            script: |
+              async ({record}) => record.selected === true
+                && location.href.includes('about:') && '{{raw_source}}'.length > 0
+            args:
+              record: "{{results.selected}}"
+    then:
+      - type: evaluate
+        args:
+          count: "{{results.counter}}"
+          record: "{{results.selected}}"
+        script: "summary => summary"
+        save_as: summary
+    else:
+      - type: evaluate
+        script: "() => {throw new Error('Structured condition checks failed');}"
+
+  - type: screenshot
+    file: "conditions.png"

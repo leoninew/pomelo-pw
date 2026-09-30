@@ -1,5 +1,5 @@
 # T01 运行时结果与类型化数据引用实施计划
-最后修改时间: 2026-09-30 14:14:35
+最后修改时间: 2026-09-30 16:05:52
 
 ## Review status
 
@@ -7,7 +7,7 @@ Accepted
 
 ## Flow mode and stage
 
-标准模式 / standard，计划 / Plan 已接受，当前为验证阶段 / Verification。
+标准模式 / standard，计划 / Plan 及验证交付 / Verification 已接受，后续进入 T02 Plan。
 
 依据已接受的 [T01 Intent](../intent/20260930-runtime-result-context.md) 和 [任务系列](../intent/20260930-p0-p1-flow-capabilities.md) 编制。本任务只建立运行时数据底座，不提前实现 T02-T08 的条件、遍历、等待、请求、提取和报告能力。
 
@@ -141,7 +141,7 @@ steps:
 
 ## Verification plan
 
-Implementation 进行必要聚焦检查；正式 Verification 在用户看过实现摘要和风险后进入。当前 Plan 只记录检查方式，不执行产品验证。
+Implementation 进行必要聚焦检查；正式 Verification 在用户看过实现摘要和风险后进入。用户已追加只进行针对性测试的约束，以下为收敛后的检查范围；历史已执行结果另见 Verification，不重复执行全量检查。
 
 - 结果矩阵：null/false/0/空集合、嵌套对象和数组；无输出与 null 区分；成功覆盖、失败失效、重试最终发布及引用快照不发生别名修改。
 - 引用矩阵：平面/字段/命名空间的统一原生类型、递归定义、文本插值、字面量转义、原文脚本、缺失和非法路径、下标越界、保留命名空间冲突及结果字符串不被重新解析。
@@ -150,16 +150,14 @@ Implementation 进行必要聚焦检查；正式 Verification 在用户看过实
 - args 矩阵：同步/async 函数、未提供与显式 null、对象/数组、引号/换行/反斜杠、异常时监听器清理；旧裸模块脚本不再被适配执行。
 - 校验矩阵：非法绑定、无输出步骤绑定、嵌套错误路径、未来结果引用不被静态拒绝、启动前 output_dir 不允许读取运行结果。
 
-优先使用项目已有工具入口。在正式 Verification 中运行以下命令；新增测试文件并入聚焦列表。
+优先使用项目已有工具入口，按实际改动选择相关测试文件。T01 主体检查已完成；CLI 修复后的最后聚焦回归如下。
 
 ```powershell
-uv run --locked --no-sync pytest tests/test_runtime.py tests/test_substitution.py tests/test_steps.py tests/test_executor.py tests/test_executor_control_flow.py tests/test_data_driven.py tests/test_conditional.py tests/test_loop.py tests/test_cli.py
-uv run --locked --no-sync ruff format --check src tests scripts
-uv run --locked --no-sync ruff check src tests scripts
-uv run --locked --no-sync mypy src tests scripts
-uv run --locked --no-sync pytest
+uv run --locked --no-sync pytest tests/test_cli.py
+uv run --locked --no-sync ruff format --check src/pomelo_pw/cli.py tests/test_cli.py
+uv run --locked --no-sync ruff check src/pomelo_pw/cli.py tests/test_cli.py
+uv run --locked --no-sync mypy src/pomelo_pw/cli.py tests/test_cli.py
 uv run --locked --no-sync pomelo-pw validate example/public/runtime-results.yaml
-uv run --locked --no-sync python scripts/install.py plugin check
 ```
 
 以迁移后的 mock 测试覆盖新契约，同时在可用的本机 Chrome/Chromium 上运行 `about:blank` 的最小真实浏览器检查，核实 JS 参数序列化、监听器清理及结果绑定。不启动开发服务器，不依赖外部网站；浏览器不可用时明确记录未完成项，不声称浏览器行为已验收。
@@ -184,7 +182,7 @@ uv run --locked --no-sync python scripts/install.py plugin check
 
 本任务不持久化业务状态，也不修改数据库。需要回退时，代码、示例和接口说明作为一组版本变更整体回退，调用方选择对应版本；不在新版本中保留旧路径或增加兼容开关。回退不涉及浏览器配置或业务服务。
 
-## Implementation handoff
+## Implementation handoff (historical)
 
 - T01 已达到可用状态：结果上下文、类型化引用、结构化 args、统一单步执行、递归校验及仓库调用迁移已实现。
 - 开发检查：252 项 pytest 测试通过；Ruff format、Ruff lint、mypy 通过。
@@ -195,6 +193,14 @@ uv run --locked --no-sync python scripts/install.py plugin check
 - 尚未运行外部业务 flow 或公共网络示例。控制体整体重试、循环耗尽和 CLI 结果协议仍由 T03、T05、T08 处理。
 - 按用户要求停在 Implementation，供用户自行测试；未创建 Verification 文档，不自动推进 T02。
 
+## Verification handoff
+
+- [T01 Verification](../verification/20260930-runtime-result-context.md) 已补齐并标记为 Accepted，用户确认 T01 测试通过。
+- 13 个真实浏览器 example、CLI 聚焦 9 项测试及离线 Chrome 6 组契约检查通过；最终 CLI 修复仅复查相关文件。
+- 历史全量 252 项测试发生在 CLI 修复及针对性测试约束之前，不作为最终全量回归结论。
+- 用户要求的 `dist/material-parse-all-p0.yaml` 已静态校验及离线 fixture 验证，未执行真实业务解析；可选图像比较未试跑。
+- 本地代码交付已有提交 `1af83db`。本次仅收尾文档并进入 T02 Plan，不执行 Git 写操作。
+
 ## User review notes
 
 - 用户在任务拆分后要求“按顺序推进”，据此接受系列入口和 T01 Intent，并进入本计划阶段。
@@ -203,3 +209,5 @@ uv run --locked --no-sync python scripts/install.py plugin check
 - 用户要求当前局部任务达到可用状态后停止，留出自行测试过程；本轮完成 T01 和必要开发检查，不推进 T02 或正式 Verification。
 - 用户随后要求“进行验证，可以拿 example 做基本测试”，据此进入 T01 Verification；只校验教材脚本，不运行真实解析。
 - Verification 的 example 试跑发现已有 data-driven CLI 汇总缺陷：三行成功后因缺少 steps_executed 抛出 KeyError。已向用户说明，修复文本汇总分支并增加 CLI 回归；不扩展 T08 的结构化输出协议。
+- 用户要求“只进行针对性的测试，不进行全量测试”，后续检查已收敛到相关文件、CLI 回归及离线浏览器契约。
+- 用户要求“推进下一个任务”，并明确“T01 测试都已经通过了”；据此接受 T01 验证交付，进入 T02 Plan，不重复测试 T01。

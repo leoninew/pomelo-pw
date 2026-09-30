@@ -170,7 +170,7 @@ class TestExecuteLoop:
         await executor._execute_loop(
             loop_data={
                 "type": "while",
-                "condition": "url_contains: example.com",
+                "condition": {"page": {"url_contains": "example.com"}},
                 "max_iterations": 10,
                 "steps": [],
             },
@@ -199,7 +199,7 @@ class TestExecuteLoop:
         await executor._execute_loop(
             loop_data={
                 "type": "while",
-                "condition": "url_contains: example.com",
+                "condition": {"page": {"url_contains": "example.com"}},
                 "max_iterations": 3,
                 "steps": [],
             },
@@ -233,6 +233,55 @@ class TestExecuteLoop:
 
 
 class TestRuntimeExecution:
+    async def test_while_reloads_results_with_local_scope_and_nested_if(self) -> None:
+        executor = FlowExecutor()
+        ctx = _make_context()
+        ctx.runtime = RuntimeContext({"limit": 1})
+        ctx.runtime.publish("count", 0)
+        page = cast(MagicMock, ctx.page)
+        page.evaluate = AsyncMock(side_effect=[1, 2, True, 3])
+        await executor._execute_steps(
+            [
+                {
+                    "type": "loop",
+                    "variables": {"limit": 3},
+                    "while": {"not": {"eq": ["{{results.count}}", "{{limit}}"]}},
+                    "max_iterations": 5,
+                    "steps": [
+                        {"type": "evaluate", "script": "n => n + 1", "args": "{{results.count}}", "save_as": "count"},
+                        {
+                            "type": "if",
+                            "condition": {"eq": ["{{results.count}}", 2]},
+                            "then": [{"type": "evaluate", "script": "() => true", "save_as": "matched"}],
+                        },
+                    ],
+                }
+            ],
+            ctx,
+        )
+        assert ctx.runtime.snapshot_results() == {"count": 3, "matched": True}
+        assert [call.args[1]["args"] for call in page.evaluate.await_args_list] == [0, 1, None, 2]
+        assert ctx.inputs["limit"] == 1
+
+    async def test_if_short_circuit_is_not_resolved_during_step_preparation(self) -> None:
+        ctx = _make_context()
+        await FlowExecutor()._execute_steps(
+            [
+                {
+                    "type": "if",
+                    "condition": {
+                        "all": [
+                            {"exists": "{{results.missing}}"},
+                            {"eq": ["{{results.missing.enabled}}", True]},
+                        ]
+                    },
+                    "then": [{"type": "evaluate", "script": "() => true"}],
+                }
+            ],
+            ctx,
+        )
+        cast(MagicMock, ctx.page).evaluate.assert_not_awaited()
+
     async def test_nested_results_are_resolved_when_children_execute(self) -> None:
         executor = FlowExecutor()
         ctx = _make_context()
@@ -241,7 +290,7 @@ class TestRuntimeExecution:
         steps: list[dict[str, Any]] = [
             {
                 "type": "if",
-                "condition": "url_contains: example.com",
+                "condition": {"page": {"url_contains": "example.com"}},
                 "then": [
                     {"type": "evaluate", "script": "() => [{id: 7}]", "save_as": "records"},
                     {
@@ -297,7 +346,7 @@ class TestRuntimeExecution:
         steps: list[dict[str, Any]] = [
             {
                 "type": "if",
-                "condition": "url_contains: example.com",
+                "condition": {"page": {"url_contains": "example.com"}},
                 "variables": {"key": "parent"},
                 "then": [
                     {"type": "evaluate", "script": "x => x", "args": "{{key}}", "variables": {"key": "child"}},

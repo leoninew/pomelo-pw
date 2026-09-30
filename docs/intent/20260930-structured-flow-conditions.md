@@ -1,13 +1,13 @@
 # T02 统一数据与页面条件
-最后修改时间: 2026-09-30 12:50:26
+最后修改时间: 2026-09-30 16:54:11
 
 ## Review status
 
-Draft
+Accepted
 
 ## Task metadata
 
-- 流程：标准模式 / standard，意图阶段 / Intent。
+- 流程：标准模式 / standard，Intent 和 Plan 已接受，当前为实现阶段 / Implementation。
 - 优先级：P0；依赖：[T01](20260930-runtime-result-context.md)；工作量：1-2 人日。
 - 系列入口：[P0/P1 流程能力任务系列](20260930-p0-p1-flow-capabilities.md)。
 
@@ -25,6 +25,7 @@ Draft
 
 - 不开发任意算术、映射或过滤表达式语言，不执行 Python eval。
 - 不新增集合迭代、等待时序或请求能力。
+- 不修正控制体整体重试、循环耗尽及执行报告，这些继续由 T03、T05、T08 处理。
 
 ## User scenarios
 
@@ -42,7 +43,7 @@ Draft
 
 ## Open questions
 
-暂无必须由用户决定的未决事项。条件 YAML 的精确结构及支持的比较操作符在 Plan 阶段明确，第一版只覆盖上述通用判断。
+暂无必须由用户决定的未决事项。条件 YAML 的精确结构、短路行为及比较操作符在 [Plan](../plan/20260930-structured-flow-conditions.md) 中明确，第一版只覆盖上述通用判断。
 
 ## Decisions
 
@@ -56,4 +57,8 @@ Draft
 
 ## User review notes
 
-依据用户对 P0/P1 的任务拆分要求创建，等待意图审阅。
+- 依据用户对 P0/P1 的任务拆分要求创建本意图。
+- 用户确认 T01 测试通过并要求推进下一个任务，视为接受 T02 Intent，进入 Plan。
+- 沿用用户的约束：不做兼容适配；当前局部任务可用后停下供用户测试；只进行针对性测试，不执行全量测试。
+- 用户要求无未决事项时开始实现，本任务进入 Implementation。
+- T02 实现及针对性回归、两个离线最小集成测试已通过，交付记录见 Plan 的 Implementation handoff；当前停在 Implementation 供用户测试。

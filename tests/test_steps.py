@@ -7,11 +7,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from pomelo_pw.browser_functions import CALL_FUNCTION
 from pomelo_pw.runtime import RuntimeContext
 from pomelo_pw.steps import get_step, list_steps
 from pomelo_pw.steps.base import StepContext
 from pomelo_pw.steps.click import ClickStep
-from pomelo_pw.steps.evaluate import CALL_FUNCTION, EvaluateStep
+from pomelo_pw.steps.evaluate import EvaluateStep
 from pomelo_pw.steps.fill import FillStep
 from pomelo_pw.steps.navigate import NavigateStep
 from pomelo_pw.steps.screenshot import ScreenshotStep

@@ -7,35 +7,9 @@ from typing import Any
 
 from playwright.async_api import ConsoleMessage
 
-from pomelo_pw.runtime import snapshot_json, validate_json
+from pomelo_pw.browser_functions import call_browser_function
+from pomelo_pw.runtime import NO_OUTPUT, validate_json
 from pomelo_pw.steps.base import BaseStep, StepContext, StepResult, StepSpec, register_step
-
-CALL_FUNCTION = """async ({script, hasArgs, args}) => {
-    const fn = (0, eval)('(' + script + '\\n)');
-    if (typeof fn !== 'function') {
-        throw new Error('evaluate.script must be a function expression');
-    }
-    const result = hasArgs ? await fn(args) : await fn();
-    const ancestors = new Set();
-    const validate = (value, path) => {
-        if (value === null || typeof value === 'string' || typeof value === 'boolean') return;
-        if (typeof value === 'number' && Number.isFinite(value)) return;
-        if (typeof value !== 'object') throw new Error(path + ': unsupported JSON value');
-        if (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype
-            && Object.getPrototypeOf(value) !== null) throw new Error(path + ': expected a JSON object');
-        if (ancestors.has(value)) throw new Error(path + ': circular data is not supported');
-        if (Object.getOwnPropertySymbols(value).length) throw new Error(path + ': symbol keys are not supported');
-        ancestors.add(value);
-        if (Array.isArray(value)) {
-            for (let i = 0; i < value.length; i++) validate(value[i], path + '[' + i + ']');
-        } else {
-            for (const key of Object.keys(value)) validate(value[key], path + '.' + key);
-        }
-        ancestors.delete(value);
-    };
-    validate(result, 'output');
-    return result;
-}"""
 
 
 @register_step
@@ -68,14 +42,9 @@ class EvaluateStep(BaseStep):
         def collect_console(message: ConsoleMessage) -> None:
             console_messages.append(f"{message.type}: {message.text}")
 
-        payload = {
-            "script": script,
-            "hasArgs": "args" in params,
-            "args": snapshot_json(params.get("args")),
-        }
         context.page.on("console", collect_console)
         try:
-            result = snapshot_json(await context.page.evaluate(CALL_FUNCTION, payload))
+            result = await call_browser_function(context.page, script, params.get("args", NO_OUTPUT))
         finally:
             context.page.remove_listener("console", collect_console)
 

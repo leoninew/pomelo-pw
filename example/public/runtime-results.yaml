@@ -12,7 +12,8 @@ steps:
     save_as: records
 
   - type: if
-    condition: "url_contains: about:blank"
+    condition:
+      page: {url_contains: "about:blank"}
     then:
       - type: evaluate
         args:

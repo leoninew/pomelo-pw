@@ -198,7 +198,8 @@ Requires Pillow: `pip install pomelo-pw[visual]`
 
 ```yaml
 - type: if
-  condition: "element_exists: .cookie-banner"
+  condition:
+    page: {element_exists: ".cookie-banner"}
   then:
     - type: click
       selector: ".accept-cookies"
@@ -207,14 +208,16 @@ Requires Pillow: `pip install pomelo-pw[visual]`
       file: "no-banner.png"
 ```
 
-Condition types:
-- `element_exists: selector`
-- `element_visible: selector`
-- `element_hidden: selector`
-- `url_contains: text`
-- `url_matches: pattern`
-- `text_contains: text`
-- JavaScript expression: `document.title.length > 0`
+Each condition is an object with exactly one operator:
+
+- `eq: [left, right]` / `ne: [left, right]`: recursive JSON equality, with no coercion; numbers share a type, but `false` differs from `0`.
+- `in: [value, array]`: array membership using the same equality rules.
+- `exists: "{{results.record.field}}"`: a complete reference; defined null/false/zero/empty values exist. Other operators fail on missing references.
+- `all: [condition, ...]` / `any: [condition, ...]`: non-empty lists, evaluated in order with short circuits; `not: condition` negates one object.
+- `page: {element_exists: selector}`: also supports `element_visible`, `element_hidden`, `url_contains`, `url_matches` (Python regex search), and `text_contains` (Playwright DOM text matching).
+- `js: {script: "({record}) => record.enabled === false", args: {record: "{{results.record}}"}}`: a synchronous or async function returning a boolean; source stays literal.
+
+Guard optional data with exists before accessing its fields. Static validation checks the whole tree, while runtime resolves only visited nodes. Page probes are immediate; visibility uses the first match and absent elements are hidden. Text probes use Playwright whitespace normalization, not HTML source. JS uses structured args and distinguishes omitted args from null. Old colon strings and bare JS expressions are rejected without compatibility adapters.
 
 ### loop — Repeat Steps
 
@@ -229,7 +232,8 @@ Condition types:
 
 # While condition
 - type: loop
-  while: "element_visible: .load-more"
+  while:
+    page: {element_visible: ".load-more"}
   max_iterations: 20
   steps:
     - type: click
@@ -300,5 +304,5 @@ On failure, automatically collects:
 - Use `save-state` / `load-state` to avoid repeated logins
 - Use `data:` field for parameterized runs across multiple users/environments
 - Use `if` to handle optional UI elements (cookie banners, modals)
-- Use `loop` + `while: element_visible: .load-more` to paginate
+- Use `loop` + `while: {page: {element_visible: ".load-more"}}` to paginate; conditions read fresh results before each iteration
 - Use `retry: 3` on flaky steps instead of adding fixed delays

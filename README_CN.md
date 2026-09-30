@@ -134,6 +134,29 @@ steps:
 
 这是不提供兼容适配的接口变更：裸模块代码改为函数，源码中的输入插值改为 `args`；完整引用不再强制转成字符串。Python 步骤实现改用 `StepContext.runtime`/`inputs` 和 `StepResult.output`、`control`、`diagnostics`，移除原 `variables` 和 `StepResult.data`。可直接运行[离线示例](example/public/runtime-results.yaml)。
 
+### 结构化条件
+
+`if.condition` 和 `loop.while` 使用同一条件对象，每个节点恰好包含一个操作符：
+
+```yaml
+- type: if
+  condition:
+    all:
+      - exists: "{{results.record.enabled}}"
+      - eq: ["{{results.record.enabled}}", false]
+      - in: ["{{results.record.status}}", [ready, completed]]
+      - page: {element_visible: "#submit"}
+  then:
+    - type: click
+      selector: "#submit"
+```
+
+`eq`/`ne` 递归比较两个 JSON 值，不隐式转换：`1` 与 `1.0` 相等，`false` 与 `0` 不同。`in: [值, 数组]` 使用相同比较规则。`exists` 只接受一个完整引用，检查路径是否可读取；已定义的 null、false、零和空值都存在，其他判断中的缺失引用会失败。`all`/`any` 接收非空数组并按顺序短路，`not` 接收一个条件对象。可选字段先用 exists 保护，再比较其值。
+
+`page` 支持 `element_exists`、`element_visible`、`element_hidden`、`url_contains`、`url_matches`（Python 正则 search）和 `text_contains`（Playwright DOM 文本匹配）。可见性以首个匹配元素为准，缺失元素视为隐藏。这些是即时探测，不自动等待或轮询。文本匹配遵循 Playwright 空白归一化规则，不再搜索 HTML 源码。
+
+自定义谓词使用 `js: {script: "({flag}) => flag === false", args: {flag: "{{results.record.enabled}}"}}`。同步或 async 函数必须返回布尔值；源码保持原文，未提供 args 与 null 的区别和 evaluate 相同。每次探测获取最新输入及结果快照，while 在每轮循环体执行前重新判断。静态校验检查整棵条件树，运行时只解析实际访问的节点。旧冒号字符串和裸 JS 表达式直接拒绝，不提供兼容适配。可直接运行[离线条件示例](example/public/structured-conditions.yaml)。
+
 ### 编写 Flow
 
 下例展示了常见模式：导航、交互、等待有意义的结果，然后保存证据。

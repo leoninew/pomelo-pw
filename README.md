@@ -134,6 +134,29 @@ Only output-producing steps support `save_as` (currently `evaluate`). A successf
 
 This is a breaking contract change with no compatibility adapters. Migrate bare module bodies to functions and source interpolation to `args`. Complete references no longer force values to strings. Python step implementations use `StepContext.runtime`/`inputs` and `StepResult.output`, `control`, and `diagnostics`; `variables` and `StepResult.data` are removed. See [the offline example](example/public/runtime-results.yaml).
 
+### Structured Conditions
+
+`if.condition` and `loop.while` use the same condition object, with exactly one operator per node:
+
+```yaml
+- type: if
+  condition:
+    all:
+      - exists: "{{results.record.enabled}}"
+      - eq: ["{{results.record.enabled}}", false]
+      - in: ["{{results.record.status}}", [ready, completed]]
+      - page: {element_visible: "#submit"}
+  then:
+    - type: click
+      selector: "#submit"
+```
+
+`eq`/`ne` compare two JSON values recursively, without coercion: `1` equals `1.0`, but `false` differs from `0`. `in: [value, array]` uses the same equality rules. `exists` requires one complete reference and tests presence, so defined null, false, zero and empty values all exist. Other missing references fail. `all`/`any` take non-empty lists and short-circuit in order; `not` takes one condition object. Guard optional fields with `exists` before comparing them.
+
+`page` supports `element_exists`, `element_visible`, `element_hidden`, `url_contains`, `url_matches` (Python regex search), and `text_contains` (Playwright DOM text matching). Visibility uses the first matching element; missing elements are hidden. These are immediate probes, without polling or waiting. Text matching uses Playwright whitespace normalization rather than searching HTML source.
+
+For custom predicates, use `js: {script: "({flag}) => flag === false", args: {flag: "{{results.record.enabled}}"}}`. The synchronous or async function must return a boolean. Source stays literal and omitted args differs from null, as with evaluate. Each probe takes a fresh input/result snapshot, and `while` probes again before every iteration. Static validation checks the complete tree; runtime resolves only visited nodes. Old colon strings and bare JS expressions are rejected without adapters. See [the offline condition example](example/public/structured-conditions.yaml).
+
 ### Author Flows
 
 The following flow shows the common pattern: navigate, interact, wait for a meaningful result, then capture evidence.

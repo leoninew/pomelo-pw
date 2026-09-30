@@ -55,14 +55,14 @@ class TestLoopStepExecute:
             {
                 "type": "loop",
                 "steps": inner,
-                "while": "element_visible: .load-more",
+                "while": {"page": {"element_visible": ".load-more"}},
                 "max_iterations": 5,
             },
         )
         assert result.success is True
         assert result.control is not None
         assert result.control["type"] == "while"
-        assert result.control["condition"] == "element_visible: .load-more"
+        assert result.control["condition"] == {"page": {"element_visible": ".load-more"}}
         assert result.control["max_iterations"] == 5
 
     @pytest.mark.asyncio
@@ -75,7 +75,7 @@ class TestLoopStepExecute:
                 "type": "loop",
                 "steps": [],
                 "times": 3,
-                "while": "element_exists: h1",
+                "while": {"page": {"element_exists": "h1"}},
             },
         )
         assert result.success is False
@@ -98,7 +98,7 @@ class TestLoopStepExecute:
             {
                 "type": "loop",
                 "steps": [],
-                "while": "element_exists: h1",
+                "while": {"page": {"element_exists": "h1"}},
             },
         )
         assert result.success is True

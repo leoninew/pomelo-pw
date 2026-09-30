@@ -119,7 +119,7 @@ class TestFlowExecutorValidation:
                 "steps": [
                     {
                         "type": "if",
-                        "condition": "true",
+                        "condition": {"eq": [1, 1]},
                         "then": [
                             {
                                 "type": "loop",
@@ -146,6 +146,42 @@ class TestFlowExecutorValidation:
                             "script": "x => x",
                             "args": {"steps": ["{{results.future}}"]},
                             "save_as": "record",
+                        }
+                    ]
+                }
+            )
+            == []
+        )
+
+    def test_nested_condition_errors_include_step_and_node_paths(self, executor: FlowExecutor) -> None:
+        errors = executor.validate_flow(
+            {
+                "steps": [
+                    {
+                        "type": "loop",
+                        "times": 1,
+                        "steps": [
+                            {
+                                "type": "if",
+                                "condition": {"all": [{"eq": [1]}]},
+                                "then": [],
+                            }
+                        ],
+                    }
+                ]
+            }
+        )
+        assert "steps[0].steps[0] (if): condition.all[0].eq" in errors[0]
+
+    def test_future_condition_references_and_operand_objects_are_valid(self, executor: FlowExecutor) -> None:
+        assert (
+            executor.validate_flow(
+                {
+                    "steps": [
+                        {
+                            "type": "if",
+                            "condition": {"eq": ["{{results.future}}", {"all": [], "js": "data"}]},
+                            "then": [],
                         }
                     ]
                 }

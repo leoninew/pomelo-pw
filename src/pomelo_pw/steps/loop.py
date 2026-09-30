@@ -6,6 +6,7 @@ from typing import Any
 
 import click
 
+from pomelo_pw.conditions import validate_condition
 from pomelo_pw.steps.base import BaseStep, StepContext, StepResult, StepSpec, register_step
 
 
@@ -24,7 +25,15 @@ class LoopStep(BaseStep):
         },
         aliases=["repeat", "foreach"],
         child_step_params=("steps",),
+        literal_params=("while",),
     )
+
+    @classmethod
+    def validate_params(cls, params: dict[str, Any]) -> list[str]:
+        errors = super().validate_params(params)
+        if "while" in params:
+            errors.extend(validate_condition(params["while"], "while"))
+        return errors
 
     async def execute(self, context: StepContext, params: dict[str, Any]) -> StepResult:
         """Execute loop logic."""

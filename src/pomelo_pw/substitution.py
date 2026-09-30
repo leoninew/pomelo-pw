@@ -41,6 +41,14 @@ def _parse_path(path: str) -> list[str | int]:
     return parts
 
 
+def validate_reference(value: Any) -> None:
+    """Validate a complete reference without resolving its data."""
+    match = REFERENCE.fullmatch(value) if isinstance(value, str) else None
+    if match is None or match.group(1) is None:
+        raise ValueError("Expected a complete {{...}} reference")
+    _parse_path(match.group(1).strip())
+
+
 class _Resolver:
     def __init__(self, inputs: dict[str, Any], results: dict[str, Any] | None) -> None:
         self.inputs = inputs

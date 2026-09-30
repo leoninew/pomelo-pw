@@ -1,5 +1,5 @@
 # Pomelo PW - Flow-based UI Automation Tool
-最后修改时间: 2026-09-30 13:41:27
+最后修改时间: 2026-09-30 16:45:50
 
 ## 项目概述
 
@@ -27,6 +27,8 @@ pomelo-pw/
 │       ├── cli.py           # CLI 入口
 │       ├── executor.py      # 流程执行器
 │       ├── runtime.py       # 运行时输入和结果快照
+│       ├── conditions.py    # 共享条件校验和求值
+│       ├── browser_functions.py # 浏览器函数及 JSON 传输
 │       ├── substitution.py  # 变量替换
 │       ├── config/          # 配置管理
 │       │   ├── __init__.py
@@ -107,7 +109,19 @@ CLI/API 覆盖 > 当前步骤变量 > 最近外层步骤变量 > data 行 > flow
 
 Python 调用迁移到 `StepContext.runtime`/`inputs` 及 `StepResult.output`/`control`/`diagnostics`；旧 data 和变量快照接口不保留适配。YAML 源码插值改为 args，裸脚本改为函数；CLI 覆盖现在统一高于行和局部输入。
 
-### 3. 流程执行
+### 3. 结构化条件
+
+`conditions.py` 提供 `validate_condition()` 与 `evaluate_condition()`。if.condition 和 loop.while 使用恰好包含一个操作符的对象，不识别旧冒号字符串或裸 JS 表达式。数据操作符为 eq/ne/in/exists，组合为 all/any/not，页面检查位于 page，自定义函数谓词位于 js。
+
+JSON 相等递归区分布尔和数字，数字 1 与 1.0 相等；in 仅接受数组。exists 仅将路径缺失转成 false，已定义的 null/false/0/空值为 true。非法路径、循环引用和其他判断中的缺失引用均失败。all/any 非空并按顺序短路；validate 检查整棵树的结构，实际求值只解析访问到的操作数，业务数据对象不解释为条件。
+
+通过现有 `literal_params` 保留原始 condition/while，直到求值时才解析。每次求值获取一份有效输入和结果快照，同一组合复用此快照；while 每轮执行循环体前重新获取，读取上一轮已发布的结果。执行器调用公共入口，不再依赖 ConditionalStep 的私有方法。
+
+页面条件用 Playwright locator 作即时探测，可见性以首个匹配元素为准，缺失视为隐藏；text_contains 使用 DOM 文本匹配及其空白归一化规则，不再查询 HTML 源码。条件入口不定义等待或轮询时序。
+
+`browser_functions.py` 共享函数调用包装器，evaluate 与 js 谓词均通过独立 args 传递数据，保持无参数与显式 null 的区别；js 必须返回布尔值。错误保留条件节点路径。控制体重试、循环耗尽和统一报告不由条件模块接管。
+
+### 4. 流程执行
 
 `FlowExecutor` 负责加载、校验、执行流程：
 

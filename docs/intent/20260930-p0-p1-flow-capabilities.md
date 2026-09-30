@@ -1,5 +1,5 @@
 # P0/P1 流程能力任务系列
-最后修改时间: 2026-09-30 14:07:34
+最后修改时间: 2026-09-30 16:54:11
 
 ## Review status
 
@@ -7,15 +7,15 @@ Accepted
 
 ## Flow mode and stage
 
-标准模式 / standard，系列意图 / Intent 已接受；当前任务 T01 为验证阶段 / Verification。
+标准模式 / standard，系列意图 / Intent 已接受；T01 验证已接受，当前任务 T02 为实现阶段 / Implementation。
 
-本系列按独立任务推进 Intent -> Plan -> Implementation -> Verification。系列拆分、T01 Intent 和 T01 Plan 已接受，其余任务仍处于 Intent 草稿。各任务进入下一阶段时，在对应阶段目录使用相同文件名；系列入口的接受不自动表示所有任务的 Plan 或实现已经接受。
+本系列按独立任务推进 Intent -> Plan -> Implementation -> Verification。系列拆分、T01 各审查阶段及 T02 Intent/Plan 已接受；T03-T09 仍处于 Intent 草稿。各任务进入下一阶段时，在对应阶段目录使用相同文件名；系列入口的接受不自动表示所有任务的 Plan 或实现已经接受。
 
 ## Background
 
 Pomelo PW 已提供导航、交互、等待、条件、循环和 evaluate，但动态数据仍缺少完整的生产、引用和消费机制。相邻 K12 项目的 `.pomelo-pw/material-parse-all.yaml` 共 259 行，其中 4 个脚本块占 206 行；脚本承担分页采集、状态保存、业务判断、逐条提交、任务轮询和汇总。
 
-当前变量引用主要用于字符串替换，evaluate 返回值无法绑定为后续变量，foreach 只是 loop 的别名。条件、等待及执行结果也不足以支持上述流程直接组合。这些通用能力是本系列的目标，教材和 MinerU 的具体业务规则仍由调用方表达。
+拆分任务时，变量引用主要用于字符串替换，evaluate 返回值无法绑定为后续变量，foreach 只是 loop 的别名。条件、等待及执行结果也不足以支持上述流程直接组合。这些通用能力是本系列的目标，教材和 MinerU 的具体业务规则仍由调用方表达。T01 已解决结果绑定和类型化引用，后续能力按任务顺序推进。
 
 ## Goals
 
@@ -87,7 +87,7 @@ Pomelo PW 已提供导航、交互、等待、条件、循环和 evaluate，但�
 ## Decisions
 
 - 所有任务采用用户指定的标准模式，不因任务较小改用轻量模式。
-- 只使用 Draft / Accepted 作为阶段审查状态；系列、T01 Intent 和 T01 Plan 为 Accepted，其余任务 Intent 为 Draft。
+- 只使用 Draft / Accepted 作为阶段审查状态；当前为 T01 Verification Accepted、T02 Intent/Plan Accepted，其余任务 Intent 为 Draft。
 - 采用现有 Playwright 能力处理浏览器等待、DOM 定位和请求；不自建通用 JS/Python 表达式引擎。
 - 嵌套校验、参数解析时机和重试边界归入相关基础任务，不另立无关的全项目重构任务。
 - 用户明确“不做兼容适配”。各任务以新契约正确性为目标；必要的旧接口移除和仓库内调用迁移纳入对应任务，外部调用方迁移另行处理。
@@ -108,3 +108,7 @@ Pomelo PW 已提供导航、交互、等待、条件、循环和 evaluate，但�
 - 当前局部任务 T01 达到可用状态后停止，等待用户自行测试；不自动进入 T02 或正式 Verification。
 - T01 实现已达到可用状态，开发检查及本机 Chrome 最小试跑通过；当前停在 Implementation，交付记录见 T01 Plan 的 Implementation handoff。
 - 用户要求进行验证并以 example 做基本测试，当前进入 T01 Verification；不自动推进 T02。
+- 用户要求“只进行针对性的测试，不进行全量测试”，适用于后续任务的检查与验证计划。
+- 用户要求“推进下一个任务”，并明确“T01 测试都已经通过了”。[T01 Verification](../verification/20260930-runtime-result-context.md) 据此接受，进入 [T02 Plan](../plan/20260930-structured-flow-conditions.md)。当前不自动推进 T03。
+- 用户要求无未决事项时开始实现，据此接受 T02 Plan，进入 T02 Implementation。
+- 用户限定“针对性的回归和最小集成测试”。T02 已达到可用状态，相关回归与两个离线 example 通过；当前停在 Implementation 供用户自行测试，见 T02 Plan 的 Implementation handoff，不自动进入 Verification 或 T03。

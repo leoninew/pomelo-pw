@@ -12,6 +12,7 @@ import yaml
 from playwright.async_api import async_playwright
 
 from pomelo_pw.browser import BrowserLifecycle
+from pomelo_pw.conditions import evaluate_condition
 from pomelo_pw.config import load_app_config
 from pomelo_pw.error_context import ErrorContextCollector
 from pomelo_pw.runtime import NO_OUTPUT, RuntimeContext, snapshot_json, validate_inputs
@@ -221,15 +222,11 @@ class FlowExecutor:
             condition = loop_data["condition"]
             max_iterations = loop_data["max_iterations"]
 
-            # Import conditional step to reuse condition evaluation
-            from pomelo_pw.steps.conditional import ConditionalStep
-
-            conditional = ConditionalStep()
             iteration = 0
 
             while iteration < max_iterations:
                 # Evaluate condition
-                result = await conditional._evaluate_condition(context.page, condition)
+                result = await evaluate_condition(context, condition, "while")
 
                 if not result:
                     self._log(f"[{prefix}while] Condition '{condition}' is false, exiting loop")

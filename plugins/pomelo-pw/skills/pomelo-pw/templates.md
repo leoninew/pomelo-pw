@@ -169,7 +169,8 @@ steps:
 
   # Dismiss cookie banner if present
   - type: if
-    condition: "element_visible: .cookie-banner"
+    condition:
+      page: {element_visible: ".cookie-banner"}
     then:
       - type: click
         selector: ".accept-cookies"
@@ -192,7 +193,8 @@ steps:
     url: "{{base_url}}"
 
   - type: if
-    condition: "url_contains: /login"
+    condition:
+      page: {url_contains: "/login"}
     then:
       - type: fill
         selector: "#email"
@@ -248,7 +250,8 @@ steps:
     url: "{{url}}"
 
   - type: loop
-    while: "element_visible: .load-more-button"
+    while:
+      page: {element_visible: ".load-more-button"}
     max_iterations: 20
     steps:
       - type: click
@@ -317,7 +320,8 @@ steps:
   - type: screenshot
     file: "homepage.png"
   - type: if
-    condition: "element_exists: .error-banner"
+    condition:
+      page: {element_exists: ".error-banner"}
     then:
       - type: screenshot
         file: "error-state.png"

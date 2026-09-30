@@ -11,7 +11,8 @@ steps:
     url: "{{base_url}}"
 
   - type: if
-    condition: "element_visible: h1"
+    condition:
+      page: {element_visible: "h1"}
     then:
       - type: screenshot
         file: "conditional-content/heading-visible.png"
@@ -20,7 +21,8 @@ steps:
         file: "conditional-content/heading-missing.png"
 
   - type: if
-    condition: "text_contains: Welcome to the-internet"
+    condition:
+      page: {text_contains: "Welcome to the-internet"}
     then:
       - type: screenshot
         file: "conditional-content/expected-copy.png"

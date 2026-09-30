@@ -28,6 +28,7 @@ pomelo-pw run example/public/data-driven-pages.yaml --var base_url=https://stagi
 | `public/data-driven-pages.yaml` | Labeled data-driven runs | Yes |
 | `public/scripted-page-check.yaml` | In-page JavaScript evaluation | Yes |
 | `public/runtime-results.yaml` | Typed results, structured args, nested result references | Yes, offline |
+| `public/structured-conditions.yaml` | Data/page/JS conditions, short circuits, fresh while results | Yes, offline |
 | `public/visual-regression.yaml` | Screenshot baseline comparison | Yes, with Pillow |
 
 ## Runtime Results
@@ -39,6 +40,16 @@ uv run --locked --no-sync pomelo-pw run example/public/runtime-results.yaml --he
 ```
 
 `evaluate.script` must be a synchronous or async function expression. Pass data through `args` and bind its JSON return value with `save_as`; script source is kept literal. Bare module bodies and template substitution inside script source must be migrated to this contract.
+
+## Structured Conditions
+
+`public/structured-conditions.yaml` creates a small DOM on `about:blank`, combines data and page probes, skips missing fields through short circuits, and increments a stored counter through a while loop. Its final branch checks both the loop results and JS argument rules, then writes `conditions.png`.
+
+```bash
+uv run --locked --no-sync pomelo-pw run example/public/structured-conditions.yaml --headless -v
+```
+
+Conditions are objects such as `eq: ["{{results.counter}}", 3]` or `page: {element_visible: "h1"}`. Use `all`, `any`, and `not` to combine them. Old condition strings must be migrated to objects; custom JS predicates use a function under `js.script` and structured `js.args`.
 
 ## Browser Interactions
 
