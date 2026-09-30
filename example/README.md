@@ -29,6 +29,7 @@ pomelo-pw run example/public/data-driven-pages.yaml --var base_url=https://stagi
 | `public/scripted-page-check.yaml` | In-page JavaScript evaluation | Yes |
 | `public/runtime-results.yaml` | Typed results, structured args, nested result references | Yes, offline |
 | `public/structured-conditions.yaml` | Data/page/JS conditions, short circuits, fresh while results | Yes, offline |
+| `public/collection-iteration.yaml` | Serial arrays, nested bindings, source snapshots, scope restoration | Yes, offline |
 | `public/visual-regression.yaml` | Screenshot baseline comparison | Yes, with Pillow |
 
 ## Runtime Results
@@ -50,6 +51,16 @@ uv run --locked --no-sync pomelo-pw run example/public/structured-conditions.yam
 ```
 
 Conditions are objects such as `eq: ["{{results.counter}}", 3]` or `page: {element_visible: "h1"}`. Use `all`, `any`, and `not` to combine them. Old condition strings must be migrated to objects; custom JS predicates use a function under `js.script` and structured `js.args`.
+
+## Collection Iteration
+
+`public/collection-iteration.yaml` fills three inputs from nested arrays on `about:blank`. It rewrites the source result after each outer iteration while preserving the original traversal, passes a literal template-shaped value unchanged, and checks that ordinary input values are restored after the loop.
+
+```bash
+uv run --locked --no-sync pomelo-pw run example/public/collection-iteration.yaml --headless -v
+```
+
+`foreach` accepts `items` and `steps`, with optional `as`/`index_as` aliases. It snapshots the array and provides isolated, zero-based bindings. Child retries do not restart the traversal; old foreach count/while calls must use `loop`.
 
 ## Browser Interactions
 

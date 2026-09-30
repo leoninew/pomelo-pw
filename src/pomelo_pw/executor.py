@@ -72,27 +72,6 @@ class FlowExecutor:
                     if attempt > 0:
                         self._log(f"[{step_num}/{total_steps}] Succeeded on attempt {attempt + 1}")
 
-                    # Handle conditional and loop steps
-                    if result.control:
-                        # Conditional step
-                        if "branch" in result.control:
-                            branch = result.control["branch"]
-                            if branch in ("then", "else"):
-                                nested_steps = result.control["steps"]
-                                await self._execute_steps(
-                                    steps=nested_steps,
-                                    context=step_context,
-                                    prefix=f"{step_num}.",
-                                )
-
-                        # Loop step
-                        elif result.control.get("type") in ("times", "while"):
-                            await self._execute_loop(
-                                loop_data=result.control,
-                                context=step_context,
-                                prefix=f"{step_num}.",
-                            )
-
                     return result
 
                 # Step returned failure
@@ -150,6 +129,7 @@ class FlowExecutor:
             output_dir=context.output_dir,
             screenshots=context.screenshots,
             scopes=(*context.scopes, step.get("variables", {})),
+            bindings=context.bindings,
         )
         raw_fields = {
             "type",
@@ -162,6 +142,7 @@ class FlowExecutor:
             {key: value for key, value in step.items() if key not in raw_fields},
             step_context.inputs,
             results,
+            step_context.bindings,
         )
         params.update({key: value for key, value in step.items() if key in raw_fields})
         errors = step_class.validate_resolved_params(params)
@@ -170,6 +151,13 @@ class FlowExecutor:
 
         result = await self._execute_with_retry(step_class(), step_context, params, step_num, total_steps)
         if result.success:
+            # Dispatch bodies outside retries to avoid replaying successful writes.
+            if result.control.get("branch") in ("then", "else"):
+                await self._execute_steps(result.control["steps"], step_context, prefix=f"{step_num}.")
+            elif result.control.get("type") in ("times", "while"):
+                await self._execute_loop(result.control, step_context, prefix=f"{step_num}.")
+            elif result.control.get("type") == "foreach":
+                await self._execute_foreach(result.control, step_context, prefix=f"{step_num}.")
             if result.output is not NO_OUTPUT:
                 result.output = snapshot_json(result.output)
             if save_as is not None:
@@ -191,12 +179,39 @@ class FlowExecutor:
 
             self._log(f"[{step_num}] {step_type} begin")
 
-            result = await self._execute_step(step, context, step_num, len(steps))
-
-            if not result.success:
-                raise RuntimeError(result.message)
+            try:
+                result = await self._execute_step(step, context, step_num, len(steps))
+                if not result.success:
+                    raise RuntimeError(result.message)
+            except Exception as error:
+                if prefix:
+                    raise RuntimeError(f"Step {step_num} ({step_type}): {error}") from error
+                raise
 
             self._log(f"[{step_num}] {result.message} end")
+
+    async def _execute_foreach(
+        self,
+        loop_data: dict[str, Any],
+        context: StepContext,
+        prefix: str = "",
+    ) -> None:
+        """Run a stable collection snapshot with isolated, opaque bindings."""
+        for index, item in enumerate(loop_data["items"]):
+            self._log(f"[{prefix}index-{index}] Foreach index {index}")
+            iteration_context = StepContext(
+                page=context.page,
+                runtime=context.runtime,
+                output_dir=context.output_dir,
+                screenshots=context.screenshots,
+                scopes=context.scopes,
+                bindings={
+                    **context.bindings,
+                    loop_data["as"]: snapshot_json(item),
+                    loop_data["index_as"]: index,
+                },
+            )
+            await self._execute_steps(loop_data["steps"], iteration_context, prefix=f"{prefix}index-{index}.")
 
     async def _execute_loop(
         self,

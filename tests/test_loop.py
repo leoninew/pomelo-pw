@@ -16,14 +16,14 @@ class TestLoopStepRegistration:
 
     def test_registered_aliases(self) -> None:
         assert get_step("repeat") is LoopStep
-        assert get_step("foreach") is LoopStep
+        assert get_step("foreach") is not LoopStep
 
     def test_missing_steps_param(self) -> None:
         errors = LoopStep.validate_params({"type": "loop"})
         assert any("steps" in e for e in errors)
 
     def test_valid_with_steps(self) -> None:
-        errors = LoopStep.validate_params({"type": "loop", "steps": []})
+        errors = LoopStep.validate_params({"type": "loop", "times": 0, "steps": []})
         assert len(errors) == 0
 
 
@@ -79,7 +79,7 @@ class TestLoopStepExecute:
             },
         )
         assert result.success is False
-        assert "Cannot specify both" in result.message
+        assert "exactly one" in result.message
 
     @pytest.mark.asyncio
     async def test_neither_times_nor_while_fails(self) -> None:
@@ -87,20 +87,38 @@ class TestLoopStepExecute:
         step = LoopStep()
         result = await step.execute(ctx, {"type": "loop", "steps": []})
         assert result.success is False
-        assert "Must specify either" in result.message
+        assert "exactly one" in result.message
 
     @pytest.mark.asyncio
     async def test_default_max_iterations(self) -> None:
         ctx = self._make_context()
-        step = LoopStep()
-        result = await step.execute(
-            ctx,
-            {
-                "type": "loop",
-                "steps": [],
-                "while": {"page": {"element_exists": "h1"}},
-            },
+        result = await LoopStep().execute(
+            ctx, {"type": "loop", "steps": [], "while": {"page": {"element_exists": "h1"}}}
         )
         assert result.success is True
-        assert result.control is not None
         assert result.control["max_iterations"] == 100
+
+
+@pytest.mark.parametrize(
+    "field, value",
+    [
+        ("times", -1),
+        ("times", True),
+        ("times", 1.0),
+        ("times", "3"),
+        ("times", None),
+        ("max_iterations", 0),
+        ("max_iterations", False),
+        ("max_iterations", "3"),
+    ],
+)
+def test_invalid_counts(field: str, value: object) -> None:
+    params = {"steps": [], "times": value} if field == "times" else {"steps": [], "while": {"eq": [1, 1]}, field: value}
+    assert any(field in error for error in LoopStep.validate_params(params))
+
+
+def test_count_and_condition_modes_reject_collection_parameters() -> None:
+    assert LoopStep.validate_params({"steps": [], "times": 1, "items": []})
+    assert LoopStep.validate_params({"steps": [], "times": 1, "max_iterations": 2})
+    assert not LoopStep.validate_params({"steps": [], "times": "{{results.count}}"})
+    assert LoopStep.validate_resolved_params({"steps": [], "times": "{{results.count}}"})

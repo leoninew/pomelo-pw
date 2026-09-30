@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -36,10 +37,11 @@ class StepContext:
     output_dir: Path
     screenshots: list[str]
     scopes: tuple[dict[str, Any], ...] = ()
+    bindings: dict[str, Any] = field(default_factory=dict)
 
     @property
     def inputs(self) -> dict[str, Any]:
-        return self.runtime.effective_inputs(self.scopes)
+        return {**self.runtime.effective_inputs(self.scopes), **deepcopy(self.bindings)}
 
 
 @dataclass

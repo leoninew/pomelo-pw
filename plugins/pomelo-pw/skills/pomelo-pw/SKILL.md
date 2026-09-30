@@ -104,6 +104,7 @@ Screenshots save to `./<flow-name>/` by default (derived from filename).
 | `load-state` | `file` | Restore saved auth state |
 | `if` | `condition`, `then` | Conditional execution |
 | `loop` | `steps`, `times`/`while` | Loop execution |
+| `foreach` | `items`, `steps`, optional `as`, `index_as` | Serial array iteration with local bindings |
 
 ## Step Details
 
@@ -242,9 +243,27 @@ Guard optional data with exists before accessing its fields. Static validation c
       network_idle: true
 ```
 
+### foreach - Array Iteration
+
+```yaml
+- type: foreach
+  items: "{{results.records}}"
+  as: record
+  index_as: position
+  steps:
+    - type: evaluate
+      args: {record: "{{record}}", index: "{{position}}"}
+      script: "payload => payload"
+```
+
+Arrays are snapshotted on entry and traversed serially; empty arrays execute no children. Default names are `item`/`index`, with a zero-based index. Aliases must be distinct, non-reserved ASCII identifiers. Bindings override ordinary variables and CLI overrides, stay opaque, and are restored after nested loops. Old foreach times/while calls must use loop; loop requires exactly one mode, integer counts, and max_iterations only with while.
+
 ### Step-Level Retry
 
 Any step supports retry parameters:
+
+Retries on if/loop/foreach only cover the parent's own probe or setup. A child failure never replays completed branches or iterations; put retries on the individual operation. Nested errors include the step path and array index.
+
 ```yaml
 - type: click
   selector: ".flaky-button"

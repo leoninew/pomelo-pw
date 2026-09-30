@@ -157,6 +157,23 @@ steps:
 
 自定义谓词使用 `js: {script: "({flag}) => flag === false", args: {flag: "{{results.record.enabled}}"}}`。同步或 async 函数必须返回布尔值；源码保持原文，未提供 args 与 null 的区别和 evaluate 相同。每次探测获取最新输入及结果快照，while 在每轮循环体执行前重新判断。静态校验检查整棵条件树，运行时只解析实际访问的节点。旧冒号字符串和裸 JS 表达式直接拒绝，不提供兼容适配。可直接运行[离线条件示例](example/public/structured-conditions.yaml)。
 
+### 集合遍历
+
+```yaml
+- type: foreach
+  items: "{{results.records}}"
+  as: record
+  index_as: position
+  steps:
+    - type: evaluate
+      args: {record: "{{record}}", index: "{{position}}"}
+      script: "payload => payload"
+```
+
+`foreach` 按顺序遍历 JSON 数组快照，空数组不执行子步骤。`as` 默认为 `item`，`index_as` 默认为 `index`，索引从 0 开始；名称必须是不同的非保留 ASCII 标识符。迭代绑定优先于普通变量和 CLI 覆盖，数据不会再次解析成模板；内层循环退出后恢复外层绑定。回写源结果不会改变本次遍历范围。可直接运行[离线集合示例](example/public/collection-iteration.yaml)。
+
+`loop` 必须且只能提供 `times`（非负整数）或 `while`；`max_iterations` 为正整数，仅允许与 while 使用。次数和上限支持完整类型化引用。原 foreach 次数/条件调用必须改用 loop。父 if/loop/foreach 的 retry 仅覆盖自身判断或准备，子步骤失败不会重放已经完成的控制体；需要重试的操作应在对应子步骤声明。嵌套错误包含步骤路径和集合索引。
+
 ### 编写 Flow
 
 下例展示了常见模式：导航、交互、等待有意义的结果，然后保存证据。
@@ -196,6 +213,7 @@ steps:
 | `check`、`uncheck` | `selector` | 控制复选框 |
 | `save-state`、`load-state` | `file` | 复用已认证的浏览器状态 |
 | `if`、`loop` | 条件或迭代配置 | 表达分支和重复操作 |
+| `foreach` | `items`、`steps`，可选 `as` / `index_as` | 遍历数组，提供局部元素和索引绑定 |
 | `evaluate` | `script`，可选 `args` 和 `save_as` | 执行页面函数并传递 JSON 数据 |
 | `scroll`、`set-viewport` | 各步骤参数 | 调整滚动位置或视口 |
 

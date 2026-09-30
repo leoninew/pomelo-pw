@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from copy import deepcopy
 from typing import TYPE_CHECKING, Any
 
 from pomelo_pw.browser_functions import call_browser_function
@@ -128,9 +129,10 @@ class _ConditionEvaluator:
         self.page = context.page
         self.inputs = context.inputs
         self.results = context.runtime.snapshot_results()
+        self.bindings = deepcopy(context.bindings)
 
     def _resolve(self, value: Any) -> JsonValue:
-        return snapshot_json(substitute_vars({"value": value}, self.inputs, self.results)["value"])
+        return snapshot_json(substitute_vars({"value": value}, self.inputs, self.results, self.bindings)["value"])
 
     async def evaluate(self, condition: dict[str, Any], path: str) -> bool:
         operator, value = next(iter(condition.items()))

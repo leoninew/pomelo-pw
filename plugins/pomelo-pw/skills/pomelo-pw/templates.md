@@ -266,6 +266,29 @@ steps:
 
 ---
 
+### Collection Results
+
+```yaml
+name: collection-results
+steps:
+  - type: evaluate
+    script: "() => [{id: 'a', enabled: true}, {id: 'b', enabled: false}]"
+    save_as: records
+  - type: foreach
+    items: "{{results.records}}"
+    as: record
+    index_as: position
+    steps:
+      - type: if
+        condition: {eq: ["{{record.enabled}}", true]}
+        then:
+          - type: evaluate
+            args: {record: "{{record}}", index: "{{position}}"}
+            script: "payload => payload"
+```
+
+Use child retries for individual operations; parent retries do not replay completed iterations.
+
 ## Data-Driven Testing
 
 ### 11. Multi-User Test

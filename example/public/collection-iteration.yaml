@@ -1,0 +1,85 @@
+name: collection-iteration
+description: Offline array iteration with nested scopes and a stable input snapshot.
+headless: false
+output_dir: output/collection-iteration
+variables:
+  item: restored
+  index: 99
+steps:
+  - type: evaluate
+    save_as: records
+    print_result: false
+    script: |
+      () => {
+        document.body.innerHTML = `
+          <main style="font:16px Arial;padding:24px;max-width:720px">
+            <h1>Collection iteration</h1>
+            <label>A / 0 <input id="a-0"></label><br><br>
+            <label>A / 1 <input id="a-1"></label><br><br>
+            <label>B / 0 <input id="b-0"></label>
+            <p id="completed"></p>
+          </main>`;
+        return [
+          {id: 'a', enabled: true, tags: ['red', '{{literal}}']},
+          {id: 'b', enabled: true, tags: ['green']},
+        ];
+      }
+  - type: foreach
+    items: "{{results.records}}"
+    as: record
+    index_as: record_index
+    steps:
+      - type: if
+        condition:
+          eq: ["{{record.enabled}}", true]
+        then:
+          - type: foreach
+            items: "{{record.tags}}"
+            steps:
+              - type: fill
+                selector: "#{{record.id}}-{{index}}"
+                value: "{{item}}"
+              - type: evaluate
+                args:
+                  record: "{{record.id}}"
+                  outer_index: "{{record_index}}"
+                  tag: "{{item}}"
+                  inner_index: "{{index}}"
+                script: |
+                  ({record, outer_index, tag, inner_index}) => {
+                    const expected = record === 'a' ? ['red', '{{literal}}'] : ['green'];
+                    if (outer_index !== (record === 'a' ? 0 : 1) || tag !== expected[inner_index]) {
+                      throw new Error('Incorrect nested item or index');
+                    }
+                    return null;
+                  }
+      - type: evaluate
+        args: {record: "{{record.id}}", index: "{{record_index}}"}
+        script: |
+          ({record, index}) => {
+            document.querySelector('#completed').textContent += `${index}: ${record} `;
+            return null;
+          }
+      - type: evaluate
+        args: []
+        script: "items => items"
+        save_as: records
+        print_result: false
+  - type: evaluate
+    args:
+      records: "{{results.records}}"
+      item: "{{item}}"
+      index: "{{index}}"
+    save_as: summary
+    script: |
+      ({records, item, index}) => {
+        const values = [...document.querySelectorAll('input')].map(input => input.value);
+        if (JSON.stringify(values) !== JSON.stringify(['red', '{{literal}}', 'green'])
+          || document.querySelector('#completed').textContent !== '0: a 1: b '
+          || records.length !== 0 || item !== 'restored' || index !== 99) {
+          throw new Error('Collection snapshot or scope restoration failed');
+        }
+        return {processed: 2, filled: values.length, values};
+      }
+  - type: screenshot
+    file: collection.png

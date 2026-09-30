@@ -50,9 +50,10 @@ def validate_reference(value: Any) -> None:
 
 
 class _Resolver:
-    def __init__(self, inputs: dict[str, Any], results: dict[str, Any] | None) -> None:
+    def __init__(self, inputs: dict[str, Any], results: dict[str, Any] | None, bindings: dict[str, Any]) -> None:
         self.inputs = inputs
         self.results = results
+        self.bindings = bindings
 
     @staticmethod
     def _input_key(location: tuple[str | int, ...]) -> str:
@@ -68,6 +69,11 @@ class _Resolver:
             return deepcopy(self._read(self.results, parts, path))
         if root not in ("inputs", "results"):
             parts.insert(0, root)
+        if not parts:
+            return {key: self.reference(key, chain) for key in dict.fromkeys((*self.inputs, *self.bindings))}
+        # Iteration values are runtime data, never template definitions.
+        if parts[0] in self.bindings:
+            return deepcopy(self._read(self.bindings, parts, path))
         value: Any = self.inputs
         location: tuple[str | int, ...] = ()
         for index, part in enumerate(parts):
@@ -137,9 +143,14 @@ class _Resolver:
 
 
 def substitute_vars(
-    params: dict[str, Any], variables: dict[str, Any], results: dict[str, Any] | None = None
+    params: dict[str, Any],
+    variables: dict[str, Any],
+    results: dict[str, Any] | None = None,
+    bindings: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Resolve parameter containers without interpreting referenced result data."""
     validate_inputs(variables)
-    resolver = _Resolver(variables, results)
+    if bindings is not None:
+        validate_inputs(bindings)
+    resolver = _Resolver(variables, results, bindings or {})
     return {key: resolver.value(value) for key, value in params.items()}

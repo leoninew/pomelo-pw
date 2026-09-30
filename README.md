@@ -157,6 +157,23 @@ This is a breaking contract change with no compatibility adapters. Migrate bare 
 
 For custom predicates, use `js: {script: "({flag}) => flag === false", args: {flag: "{{results.record.enabled}}"}}`. The synchronous or async function must return a boolean. Source stays literal and omitted args differs from null, as with evaluate. Each probe takes a fresh input/result snapshot, and `while` probes again before every iteration. Static validation checks the complete tree; runtime resolves only visited nodes. Old colon strings and bare JS expressions are rejected without adapters. See [the offline condition example](example/public/structured-conditions.yaml).
 
+### Collection Iteration
+
+```yaml
+- type: foreach
+  items: "{{results.records}}"
+  as: record
+  index_as: position
+  steps:
+    - type: evaluate
+      args: {record: "{{record}}", index: "{{position}}"}
+      script: "payload => payload"
+```
+
+`foreach` visits a snapshot of a JSON array in order; an empty array executes no children. `as` defaults to `item` and `index_as` to `index`, starting at zero. Names must be distinct, non-reserved ASCII identifiers. Iteration bindings take precedence over ordinary variables and CLI overrides, remain opaque data, and restore outer bindings after nested iterations. Rewriting the source result does not change an active traversal. See [the offline collection example](example/public/collection-iteration.yaml).
+
+`loop` requires exactly one of `times` (a nonnegative integer) or `while`; `max_iterations` is a positive integer allowed only with `while`. Both counts support complete typed references. Old `foreach` count/while calls must use `loop`. Parent `if`/`loop`/`foreach` retries cover only the parent's own probe or setup; child failures never replay completed bodies. Declare retries on the child operation that needs them. Nested errors include the step path and collection index.
+
 ### Author Flows
 
 The following flow shows the common pattern: navigate, interact, wait for a meaningful result, then capture evidence.
@@ -196,6 +213,7 @@ steps:
 | `check`, `uncheck` | `selector` | Control checkboxes |
 | `save-state`, `load-state` | `file` | Reuse authenticated browser state |
 | `if`, `loop` | condition or iteration settings | Model branches and repeated actions |
+| `foreach` | `items`, `steps`, optional `as` / `index_as` | Traverse an array with local item and index bindings |
 | `evaluate` | `script`, optional `args` and `save_as` | Run a browser function and pass JSON data |
 | `scroll`, `set-viewport` | step-specific parameters | Adjust scroll position or viewport |
 
