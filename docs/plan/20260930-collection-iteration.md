@@ -7,7 +7,7 @@ Accepted
 
 ## Flow mode and stage
 
-标准模式 / standard，Intent/Plan 已接受，Implementation 已交付，当前为验证阶段 / Verification。用户已查看实现交付后明确要求“进行验证”，本轮进行针对性回归和离线最小集成，不自动推进后续任务。
+标准模式 / standard，Intent/Plan 已接受，Implementation 已交付，当前为验证阶段 / Verification。用户已查看实现交付后明确要求“进行验证”，本轮与 T04 一起进行针对性回归和离线最小集成，不自动推进后续任务。
 
 前置依赖：T01 已由用户确认测试通过，T02 已交付并由用户提交。意图见 [T03 Intent](../intent/20260930-collection-iteration.md)。
 
@@ -52,6 +52,7 @@ Accepted
 - 集合新增测试及受影响的 loop、引用、执行器测试。
 - `example/public/collection-iteration.yaml`、`example/README.md`、`README.md`、`README_CN.md`、`docs/DESIGN.md`、仓库插件 skill/template。
 - 本计划、T03 Intent 及系列入口。
+- 用户追加的验收缺陷修复：`src/pomelo_pw/cli.py`、`tests/test_cli.py`；run/validate 失败退出码与输出结果一致。
 
 ## Verification plan
 
@@ -81,13 +82,15 @@ Accepted
 - T03 首轮相关 6 个测试文件共 280 项通过。此后恢复 default_max_iterations 测试的类作用域并简化已由校验保证的 loop 分支；依用户“我自行测试”的新指令，不再运行回归或浏览器集成。
 - 最终相关 9 个 Python 文件通过 Ruff format/lint 和 mypy。离线 collection-iteration 示例已编写，尚未试跑，交由用户测试。
 - 旧 foreach times/while 必须改成 loop，父控制步骤 retry 不再重放控制体；没有兼容适配。
+- 用户在实现过程中要求推进下一步并自行测试，随后确认继续；当前移交 T03 并进入 T04 Implementation，不创建 T03 Verification，不操作 Git 暂存或提交。
 
 ## Verification handoff
 
-- T03 首轮相关 6 个测试文件共 280 项通过，9 个变更 Python 文件静态检查通过；没有运行全量测试。
-- 离线 collection-iteration、v2 正常/空列表/轮询耗尽及 foreach 失败证据检查通过。
-- 新增示例及 collection-results 模板的无效 about:blank 导航已移除。
-- 完整结论和限制见 [T03 Verification](../verification/20260930-collection-iteration.md)。用户要求按任务分两批先后提交，并明确无需再次测试。
+- 用户明确要求验证；T03/T04 首轮 8 个相关测试文件共 370 项通过，13 个变更 Python 文件及相关 YAML/模板静态检查通过。
+- 本机 Chrome headless 离线 collection-iteration 和 page-condition-wait、v2 正常/空列表/轮询耗尽、真实浏览器导航/超时及失败证据检查通过。
+- 验证修正两份新增示例及 collection-results 模板的无效 about:blank 导航；T04 的等待取消日志修正同步回归通过。
+- 用户要求验收发现的问题当轮解决后，修正 run --json 和 validate 失败仍退出 0；同步修正 T04 原生 JS 的 Promise 真值误判及 null 参数丢失。最终相关回归 66 项通过，四个修复文件静态检查通过，真实 CLI 的五个场景验证退出码与 JSON 一致。
+- 完整结论、证据、范围偏差和限制见 [T03 Verification](../verification/20260930-collection-iteration.md)。当前等待用户审阅，不自动推进后续任务，不操作 Git 暂存/提交。
 
 ## User review notes
 
@@ -95,3 +98,4 @@ Accepted
 - 用户限定针对性回归和最小集成，不进入全量测试或正式 Verification。
 - 用户在本轮改为自行测试；此后仅进行必要静态检查，T03 的离线例子和最终回归未运行。
 - 用户随后明确“进行验证”，授权本轮运行相关回归和离线最小集成；保留此前不跑全量测试、不执行真实教材解析和用户自行提交的约束。
+- 用户明确指出验收发现的 CLI 问题需要分析并解决，不能只记录或推迟；随后要求“不追求极致的覆盖率”，追加检查保持针对性回归和最小集成。

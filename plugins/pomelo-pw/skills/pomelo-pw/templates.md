@@ -266,6 +266,23 @@ steps:
 
 ---
 
+### Combined Page Readiness
+
+```yaml
+- type: wait
+  condition:
+    all:
+      - page: {url_contains: "/items?page=2"}
+      - page: {element_visible: "table tbody tr"}
+      - js:
+          script: "({id}) => !document.querySelector('table').inert && document.querySelector('tr').dataset.id === id"
+          args: {id: "{{record.id}}"}
+  timeout: 5000
+  interval: 100
+```
+
+Run after the navigation/click and record extraction. Only one wait mode is allowed; condition combinations do not submit operations or refresh runtime results.
+
 ### Collection Results
 
 ```yaml

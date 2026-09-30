@@ -129,7 +129,17 @@ JSON 相等递归区分布尔和数字，数字 1 与 1.0 相等；in 仅接受�
 
 `_execute_with_retry()` 只执行单一步骤自身，`_execute_step()` 在重试完成后调度控制体；子步骤有各自重试边界。父控制步骤不会因子步骤失败重放已经完成的分支/迭代/写操作。集合通过 index-N 和子步骤路径定位错误，沿既有顶层失败证据路径传播，不新增报告契约或自动聚合结果。
 
-### 5. 流程执行
+### 5. 页面条件等待
+
+`wait.condition` 直接消费共享条件树，literal_params 保留条件与 JS 原文。`wait_for_condition()` 在开始时复制运行时输入、结果及迭代绑定，实时观察页面；单一 page 条件使用 Locator.wait_for / Page.wait_for_url，URL 只等待 commit，单一 JS 条件使用共享严格布尔包装和 Page.wait_for_function，并释放句柄。
+
+Playwright 原生轮询同步判断谓词返回值，包装器必须返回实际布尔值，不能直接返回 Promise。同步结果直接校验；异步结果保存在单次等待的参数对象上，pending 时返回 false，完成后仅 true 结束等待，false 继续，错误在下一次探测传播；不会并行发起未结束的调用。原生等待的 args 在传输边界统一使用 JSON 编码，每次调用解码，避免等待接口组装参数时递归删除 None，保留缺省/null 及嵌套 JSON 数据。
+
+组合条件使用现有 evaluator，按 interval 重查，asyncio.timeout 将探测和等待限制在一个截止时间内；只有 false 才继续，错误立即传播。原生叶节点使用 Playwright 自身时限；组合探测通过 shield 保留在途 Playwright 调用，在外层超时/取消后消费迟到异常，避免取消协议 Future 后出现未取回异常。等待退出不强制终止页面用户函数，谓词应只观察页面。组合探测仅对明确的导航销毁执行上下文错误重试，关闭页面或业务 JS 错误不会转成未就绪。超时包括条件与时限，错误仍走顶层既有截图/页面/console/network 证据收集。
+
+WaitStep 按字段存在性校验恰好一种原生模式，拒绝多模式、null 开关、非法枚举、字符串数字和无效范围；state、interval、route_stable_duration 限定对应模式。不做优先级适配或旧条件转换。animation_stable 使用 document.getAnimations() 观察运行中或 pending 的动画。页面等待不执行查询步骤、不更新结果，数据刷新轮询属于 T05。
+
+### 6. 流程执行
 
 `FlowExecutor` 负责加载、校验、执行流程：
 

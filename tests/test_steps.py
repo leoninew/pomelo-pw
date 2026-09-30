@@ -302,9 +302,9 @@ class TestWaitStepValidation:
     """Tests for wait step validation."""
 
     def test_validate_no_required_params(self) -> None:
-        """Test validation passes with no params (all optional)."""
+        """A wait must choose exactly one mode even though fields are optional."""
         errors = WaitStep.validate_params({"type": "wait"})
-        assert len(errors) == 0
+        assert any("exactly one mode" in error for error in errors)
 
     def test_validate_with_selector(self) -> None:
         """Test validation passes with selector."""

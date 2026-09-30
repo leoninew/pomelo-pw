@@ -1,0 +1,104 @@
+name: page-condition-wait
+description: Offline SPA readiness waits with delayed rows and structured arguments.
+headless: false
+output_dir: output/page-condition-wait
+steps:
+  - type: evaluate
+    save_as: pages
+    print_result: false
+    script: |
+      () => {
+        document.body.innerHTML = `
+          <main style="font:16px Arial;padding:24px;max-width:720px">
+            <h1>Page condition wait</h1>
+            <button id="next-a">Page A</button>
+            <button id="next-b">Page B</button>
+            <table style="margin-top:20px"><tbody><tr data-id="old"><td>Old row</td></tr></tbody></table>
+            <p id="completed"></p>
+          </main>`;
+        const pages = [{id: 'a', delay: 40}, {id: 'b', delay: 30}];
+        for (const page of pages) {
+          document.querySelector(`#next-${page.id}`).onclick = () => {
+            location.hash = `page-${page.id}`;
+            const table = document.querySelector('table');
+            table.inert = true;
+            setTimeout(() => {
+              const row = table.querySelector('tr');
+              row.dataset.id = page.id;
+              row.textContent = `Ready row ${page.id}`;
+              table.inert = false;
+            }, page.delay);
+          };
+        }
+        return pages;
+      }
+  - type: wait
+    condition: {page: {element_visible: h1}}
+    timeout: 2000
+  - type: foreach
+    items: "{{results.pages}}"
+    as: expected
+    steps:
+      - type: click
+        selector: "#next-{{expected.id}}"
+      - type: wait
+        condition:
+          all:
+            - page: {url_contains: "#page-{{expected.id}}"}
+            - page: {element_visible: "table tbody tr"}
+            - js:
+                script: |
+                  ({id}) => {
+                    const table = document.querySelector('table');
+                    const first = table?.querySelector('tbody tr');
+                    return !!table && !table.inert && !!first && first.dataset.id === id;
+                  }
+                args: {id: "{{expected.id}}"}
+        timeout: 2000
+        interval: 10
+      - type: if
+        condition: {exists: "{{expected.id}}"}
+        then:
+          - type: wait
+            condition:
+              js:
+                script: "async ({id}) => document.querySelector('tr').dataset.id === id"
+                args: {id: "{{expected.id}}"}
+            timeout: 2000
+          - type: evaluate
+            args: "{{expected.id}}"
+            save_as: last
+            script: |
+              id => {
+                if (document.querySelector('tr').dataset.id !== id) {
+                  throw new Error('URL changed before row readiness');
+                }
+                document.querySelector('#completed').textContent += `${id} `;
+                return {id, ready: true};
+              }
+  - type: wait
+    condition:
+      js: {script: "function () { return arguments.length === 0; }"}
+    timeout: 2000
+  - type: wait
+    condition:
+      js:
+        script: "function (value) { return arguments.length === 1 && value === null; }"
+        args: null
+    timeout: 2000
+  - type: wait
+    condition: {page: {text_contains: "a b"}}
+    timeout: 2000
+  - type: evaluate
+    args: "{{results.last}}"
+    save_as: summary
+    script: |
+      last => {
+        const completed = document.querySelector('#completed').textContent.trim().split(' ');
+        if (JSON.stringify(completed) !== JSON.stringify(['a', 'b']) || last.id !== 'b' || !last.ready) {
+          throw new Error('Page readiness sequence failed');
+        }
+        return {ready: completed.length, completed, last};
+      }
+  - type: screenshot
+    file: ready.png

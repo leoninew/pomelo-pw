@@ -135,6 +135,23 @@ Provide `selector` and exactly one option selector:
 
 ### wait — Enhanced SPA Support
 
+Choose exactly one wait mode. For SPA readiness, combine observations under condition:
+
+```yaml
+- type: wait
+  condition:
+    all:
+      - page: {url_contains: "/items?page=2"}
+      - page: {element_visible: "table tbody tr"}
+      - js:
+          script: "({id}) => !document.querySelector('table').inert && document.querySelector('tr').dataset.id === id"
+          args: {id: "{{record.id}}"}
+  timeout: 5000
+  interval: 100
+```
+
+The shared tree uses fixed runtime snapshots and live page state. Single page/JS conditions use native Playwright waits; combinations check within one deadline. JS must return a boolean, keeps source literal and uses structured args. False means keep waiting; errors fail immediately. interval only applies to condition, state only to selector, route_stable_duration only to route_stable. Timing values are finite positive numbers (delay may be zero); flag modes require true. Mixed modes and string numbers are rejected without adapters.
+
 ```yaml
 # Wait for element
 - type: wait
@@ -157,7 +174,7 @@ Provide `selector` and exactly one option selector:
 
 - type: wait
   route_stable: true
-  duration: 500
+  route_stable_duration: 500
 
 # Fixed delay
 - type: wait

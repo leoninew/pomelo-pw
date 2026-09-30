@@ -87,7 +87,9 @@ def run(
             click.echo(msg)
         else:
             click.echo(f"Failed: {result.get('error', 'Unknown error')}", err=True)
-            sys.exit(1)
+
+    if not result.get("success"):
+        sys.exit(1)
 
 
 @cli.command(context_settings={"help_option_names": ["-h", "--help"]})
@@ -109,6 +111,9 @@ def validate(flow: str, json_output: bool) -> None:
                 click.echo(f"  - {err}")
         else:
             click.echo("Validation passed")
+
+    if errors:
+        sys.exit(1)
 
 
 @cli.command(context_settings={"help_option_names": ["-h", "--help"]})

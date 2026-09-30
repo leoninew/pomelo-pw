@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
+import math
 import re
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any
 
-from pomelo_pw.browser_functions import call_browser_function
+from playwright.async_api import Error as PlaywrightError
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+
+from pomelo_pw.browser_functions import call_browser_function, wait_for_browser_function
 from pomelo_pw.runtime import NO_OUTPUT, JsonValue, snapshot_json, validate_json
 from pomelo_pw.substitution import REFERENCE, UndefinedVariableError, substitute_vars, validate_reference
 
@@ -20,6 +25,10 @@ PAGE_OPERATORS = frozenset(
 
 class ConditionEvaluationError(ValueError):
     """A condition could not be evaluated, with its node path attached."""
+
+
+class ConditionWaitTimeout(TimeoutError):
+    """A valid condition did not become true before its deadline."""
 
 
 def _has_reference(value: Any) -> bool:
@@ -134,6 +143,28 @@ class _ConditionEvaluator:
     def _resolve(self, value: Any) -> JsonValue:
         return snapshot_json(substitute_vars({"value": value}, self.inputs, self.results, self.bindings)["value"])
 
+    def _page_parameter(self, value: Any, operator: str) -> str:
+        parameter = self._resolve(value)
+        if not isinstance(parameter, str) or not parameter.strip():
+            raise ValueError(f"{operator} must resolve to a non-empty string")
+        return parameter
+
+    async def wait_for_page(self, condition: dict[str, Any], timeout: float) -> None:
+        operator, value = next(iter(condition.items()))
+        parameter = self._page_parameter(value, operator)
+        if operator == "url_contains":
+            await self.page.wait_for_url(lambda url: parameter in url, timeout=timeout, wait_until="commit")
+        elif operator == "url_matches":
+            await self.page.wait_for_url(re.compile(parameter), timeout=timeout, wait_until="commit")
+        elif operator == "text_contains":
+            await self.page.get_by_text(parameter, exact=False).first.wait_for(state="attached", timeout=timeout)
+        elif operator == "element_exists":
+            await self.page.locator(parameter).first.wait_for(state="attached", timeout=timeout)
+        elif operator == "element_visible":
+            await self.page.locator(parameter).first.wait_for(state="visible", timeout=timeout)
+        else:
+            await self.page.locator(parameter).first.wait_for(state="hidden", timeout=timeout)
+
     async def evaluate(self, condition: dict[str, Any], path: str) -> bool:
         operator, value = next(iter(condition.items()))
         location = f"{path}.{operator}"
@@ -171,9 +202,7 @@ class _ConditionEvaluator:
             return equal if operator == "eq" else not equal
         if operator == "page":
             page_operator, parameter = next(iter(value.items()))
-            parameter = self._resolve(parameter)
-            if not isinstance(parameter, str) or not parameter.strip():
-                raise ValueError(f"{page_operator} must resolve to a non-empty string")
+            parameter = self._page_parameter(parameter, page_operator)
             if page_operator == "url_contains":
                 return parameter in self.page.url
             if page_operator == "url_matches":
@@ -198,3 +227,60 @@ async def evaluate_condition(context: StepContext, condition: Any, path: str = "
     if errors:
         raise ConditionEvaluationError("; ".join(errors))
     return await _ConditionEvaluator(context).evaluate(condition, path)
+
+
+def _navigation_destroyed_context(error: BaseException) -> bool:
+    while error.__cause__ is not None:
+        error = error.__cause__
+    return isinstance(error, PlaywrightError) and any(
+        message in error.message
+        for message in (
+            "Execution context was destroyed, most likely because of a navigation",
+            "Cannot find context with specified id",
+        )
+    )
+
+
+def _finish_cancelled_probe(task: asyncio.Task[bool]) -> None:
+    if not task.cancelled():
+        task.exception()
+
+
+async def wait_for_condition(context: StepContext, condition: Any, *, timeout: float, interval: float = 100) -> None:
+    """Wait against fixed runtime snapshots and live page state within one deadline."""
+    for key, value in (("timeout", timeout), ("interval", interval)):
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+            raise ValueError(f"{key} must be a finite positive number")
+    errors = validate_condition(condition)
+    if errors:
+        raise ConditionEvaluationError("; ".join(errors))
+    evaluator = _ConditionEvaluator(context)
+    operator, value = next(iter(condition.items()))
+    try:
+        if operator == "page":
+            await evaluator.wait_for_page(value, timeout)
+            return
+        if operator == "js":
+            args = evaluator._resolve(value["args"]) if "args" in value else NO_OUTPUT
+            await wait_for_browser_function(context.page, value["script"], args, timeout=timeout, interval=interval)
+            return
+        async with asyncio.timeout(timeout / 1000):
+            while True:
+                probe = asyncio.create_task(evaluator.evaluate(condition, "condition"))
+                try:
+                    # Let in-flight Playwright calls finish and consume late errors.
+                    if await asyncio.shield(probe):
+                        return
+                except asyncio.CancelledError:
+                    probe.add_done_callback(_finish_cancelled_probe)
+                    raise
+                except ConditionEvaluationError as error:
+                    if not _navigation_destroyed_context(error):
+                        raise
+                await asyncio.sleep(interval / 1000)
+    except (TimeoutError, PlaywrightTimeoutError) as error:
+        raise ConditionWaitTimeout(f"Timeout after {timeout:g}ms waiting for condition {condition!r}") from error
+    except ConditionEvaluationError:
+        raise
+    except Exception as error:
+        raise ConditionEvaluationError(f"condition.{operator}: {error}") from error

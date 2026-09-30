@@ -7,9 +7,9 @@ Accepted
 
 ## Flow mode and stage
 
-标准模式 / standard，系列意图 / Intent 已接受；T01 验证已接受，T02 已交付并由用户提交，T03 Implementation 已交付，当前 Verification 技术检查通过，T03 验收文档为 Draft 待用户审阅，后续任务按顺序推进。
+标准模式 / standard，系列意图 / Intent 已接受；T01 验证已接受，T02 已交付并由用户提交，T03/T04 Implementation 已交付，当前 Verification 技术检查通过，验收文档为 Draft 待用户审阅，不自动推进 T05。
 
-本系列按独立任务推进 Intent -> Plan -> Implementation -> Verification。系列拆分、T01 各审查阶段及 T02/T03 Intent/Plan 已接受；T04-T09 仍处于 Intent 草稿。各任务进入下一阶段时，在对应阶段目录使用相同文件名；系列入口的接受不自动表示所有任务的 Plan 或实现已经接受。
+本系列按独立任务推进 Intent -> Plan -> Implementation -> Verification。系列拆分、T01 各审查阶段及 T02-T04 Intent/Plan 已接受；T05-T09 仍处于 Intent 草稿。各任务进入下一阶段时，在对应阶段目录使用相同文件名；系列入口的接受不自动表示所有任务的 Plan 或实现已经接受。
 
 ## Background
 
@@ -87,7 +87,7 @@ Pomelo PW 已提供导航、交互、等待、条件、循环和 evaluate，但�
 ## Decisions
 
 - 所有任务采用用户指定的标准模式，不因任务较小改用轻量模式。
-- 只使用 Draft / Accepted 作为阶段审查状态；当前为 T01 Verification Accepted、T02/T03 Intent/Plan Accepted，其余任务 Intent 为 Draft。
+- 只使用 Draft / Accepted 作为阶段审查状态；当前为 T01 Verification Accepted、T02-T04 Intent/Plan Accepted，其余任务 Intent 为 Draft。
 - 采用现有 Playwright 能力处理浏览器等待、DOM 定位和请求；不自建通用 JS/Python 表达式引擎。
 - 嵌套校验、参数解析时机和重试边界归入相关基础任务，不另立无关的全项目重构任务。
 - 用户明确“不做兼容适配”。各任务以新契约正确性为目标；必要的旧接口移除和仓库内调用迁移纳入对应任务，外部调用方迁移另行处理。
@@ -113,4 +113,6 @@ Pomelo PW 已提供导航、交互、等待、条件、循环和 evaluate，但�
 - 用户要求无未决事项时开始实现，据此接受 T02 Plan，进入 T02 Implementation。
 - 用户限定“针对性的回归和最小集成测试”。T02 已达到可用状态，相关回归与两个离线 example 通过；当前停在 Implementation 供用户自行测试，见 T02 Plan 的 Implementation handoff，不自动进入 Verification 或 T03。
 - 用户自行提交 T02，要求将原材料脚本改写为 dist/material-parse-all-v2.yaml 并推进下一步；v2 离线正常/空列表/轮询耗尽 fixture 通过。沿用“没有未决事项就开始实现”，接受 T03 Intent/Plan 并进入 Implementation，达到可用状态后停止供用户测试。
-- T03 集合遍历实现与离线验证已交付，首轮相关回归 280 项通过。用户要求将 T03/T04 分两批先后提交，并明确无需再次测试；第一批交付 T03，页面等待及 CLI 验收修复归入第二批。
+- T03 首轮相关回归 280 项通过，之后用户要求推进下一步并自行测试，随后明确继续。T03 收尾和相关 9 个 Python 文件静态检查通过；按 [T04 Plan](../plan/20260930-page-condition-wait.md) 完成页面条件等待实现，本轮后续不运行回归或浏览器试跑。T04 仅静态检查通过，交由用户测试；不创建正式 Verification，不自动推进 T05。
+- 用户随后要求“进行验证”。T03/T04 的 8 个相关测试文件最终 370 项通过，两个离线 example、v2 三个受控场景及真实浏览器边界/失败证据通过。验证中修正示例导航和等待超时取消处理，没有扩大到全量测试或真实业务；[T03 Verification](../verification/20260930-collection-iteration.md)、[T04 Verification](../verification/20260930-page-condition-wait.md) 技术结论通过，文档待用户审阅。
+- 用户指出验收发现的问题应分析并解决，随后要求“不追求极致的覆盖率”。追加修复 run --json 与 validate 失败退出 0、原生 JS 的 Promise 真值误判及 null 参数丢失，相关回归最终 66 项通过，真实 CLI 与原生等待最小集成通过；退出码问题已当轮解决，没有推迟到 T08。T03/T04 Verification 仍为 Draft，不自动推进 T05。

@@ -1,13 +1,13 @@
 # T04 页面条件等待
-最后修改时间: 2026-09-30 12:50:26
+最后修改时间: 2026-09-30 20:08:02
 
 ## Review status
 
-Draft
+Accepted
 
 ## Task metadata
 
-- 流程：标准模式 / standard，意图阶段 / Intent。
+- 流程：标准模式 / standard，Intent/Plan 已接受，Implementation 已交付，当前 Verification 技术检查通过，待用户审阅。
 - 优先级：P0；依赖：[T01](20260930-runtime-result-context.md)、[T02](20260930-structured-flow-conditions.md)；工作量：1-2 人日。
 - 系列入口：[P0/P1 流程能力任务系列](20260930-p0-p1-flow-capabilities.md)。
 
@@ -48,7 +48,7 @@ Draft
 
 - 页面谓词优先复用 Playwright 的 wait_for_function 等现有机制。
 - 页面等待与 T05 的步骤轮询分开：前者观察页面，后者执行查询步骤并更新运行时数据。
-- 不维护新旧等待参数的双路径；仓库内受影响的等待示例随本任务迁移。
+- 各原生等待模式有明确互斥契约，新增 condition 直接消费统一条件；不通过参数优先级、旧语法转换或兼容适配选择模式。仓库示例随本任务更新。
 
 ## Risks
 
@@ -56,4 +56,7 @@ Draft
 
 ## User review notes
 
-依据用户对 P0/P1 的任务拆分要求创建，等待意图审阅。
+- 用户要求推进下一步并自行测试，随后明确继续；沿用“没有未决事项就开始实现”，接受 Intent/Plan 后进入 T04 实现。
+- 后续运行测试交给用户，仅进行必要静态检查；达到可用状态后停止，不自动进入 Verification 或 T05。
+- 用户已查看实现后明确要求“进行验证”，授权 Agent 运行本轮针对性回归和离线最小集成；技术检查通过，记录见 T04 Verification，不自动推进 T05。
+- 用户要求发现的问题当轮解决；追加检查修复 CLI 失败退出码、原生 JS 的 Promise 真值误判及 null 参数丢失，相关回归和最小集成通过。不追求极致覆盖率，当前继续等待验收。

@@ -157,6 +157,25 @@ steps:
 
 自定义谓词使用 `js: {script: "({flag}) => flag === false", args: {flag: "{{results.record.enabled}}"}}`。同步或 async 函数必须返回布尔值；源码保持原文，未提供 args 与 null 的区别和 evaluate 相同。每次探测获取最新输入及结果快照，while 在每轮循环体执行前重新判断。静态校验检查整棵条件树，运行时只解析实际访问的节点。旧冒号字符串和裸 JS 表达式直接拒绝，不提供兼容适配。可直接运行[离线条件示例](example/public/structured-conditions.yaml)。
 
+### 页面条件等待
+
+```yaml
+- type: wait
+  condition:
+    all:
+      - page: {url_contains: "/items?page=2"}
+      - page: {element_visible: "table tbody tr"}
+      - js:
+          script: "({id}) => !document.querySelector('table').inert && document.querySelector('tr').dataset.id === id"
+          args: {id: "{{record.id}}"}
+  timeout: 5000
+  interval: 100
+```
+
+`wait.condition` 使用与 if/while 相同的条件树及严格布尔 JS 契约。已经满足时立即完成，未满足时在统一截止时间内重复检查，单次 async 探测也受超时约束；谓词错误立即失败。单个 page/JS 条件使用 Playwright 原生等待，组合条件使用固定输入/结果/迭代绑定快照观察实时页面。interval 控制组合条件和 JS 谓词的检查间隔，单个 page 条件使用 Playwright 内置探测节奏。仅等待 URL 不能保证列表已刷新。可直接运行[离线等待示例](example/public/page-condition-wait.yaml)。
+
+每个 wait 必须且只能选择 condition、delay、selector、url、url_contains、url_pattern、for、network_idle、animation_stable 或 route_stable 之一。interval 仅用于 condition（默认 100ms），state 仅用于 selector，route_stable_duration 仅用于 route_stable。timeout 默认 30000ms；时间参数为正且有限的数字，delay 可以为 0。支持完整类型化引用，拒绝字符串数字和布尔值；开关模式必须为 true。混合模式直接校验失败，没有适配。动画稳定改为观察正在运行的 Web Animations，不根据 CSS 声明时长判断。
+
 ### 集合遍历
 
 ```yaml

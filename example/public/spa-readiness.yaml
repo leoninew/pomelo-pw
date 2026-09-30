@@ -11,8 +11,8 @@ steps:
     url: "{{base_url}}"
 
   - type: wait
-    selector: "h1"
-    state: visible
+    condition:
+      page: {element_visible: "h1"}
     timeout: 5000
 
   - type: wait

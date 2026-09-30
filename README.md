@@ -157,6 +157,25 @@ This is a breaking contract change with no compatibility adapters. Migrate bare 
 
 For custom predicates, use `js: {script: "({flag}) => flag === false", args: {flag: "{{results.record.enabled}}"}}`. The synchronous or async function must return a boolean. Source stays literal and omitted args differs from null, as with evaluate. Each probe takes a fresh input/result snapshot, and `while` probes again before every iteration. Static validation checks the complete tree; runtime resolves only visited nodes. Old colon strings and bare JS expressions are rejected without adapters. See [the offline condition example](example/public/structured-conditions.yaml).
 
+### Page Condition Waits
+
+```yaml
+- type: wait
+  condition:
+    all:
+      - page: {url_contains: "/items?page=2"}
+      - page: {element_visible: "table tbody tr"}
+      - js:
+          script: "({id}) => !document.querySelector('table').inert && document.querySelector('tr').dataset.id === id"
+          args: {id: "{{record.id}}"}
+  timeout: 5000
+  interval: 100
+```
+
+`wait.condition` uses the same condition tree and strict boolean JS contract as `if`/`while`. Already-satisfied conditions finish immediately; false conditions repeat within one deadline, including async probes. Predicate errors fail immediately. Single page/JS leaves use Playwright's native waits; combinations inspect live page state using fixed input/result/iteration snapshots. `interval` controls combinations and JS predicates; page leaves use Playwright's built-in polling. A URL change alone proves only the URL condition. See [the offline wait example](example/public/page-condition-wait.yaml).
+
+Each wait must choose exactly one mode: `condition`, `delay`, `selector`, `url`, `url_contains`, `url_pattern`, `for`, `network_idle`, `animation_stable`, or `route_stable`. `interval` applies only to condition (default 100ms), `state` only to selector, and `route_stable_duration` only to route_stable. Timeout defaults to 30000ms; timing values must be finite and positive, except delay may be zero. Complete typed references are allowed; string numbers and booleans are rejected. Flag modes require true. Mixed modes fail validation without adapters. Animation stability observes active Web Animations rather than declared CSS durations.
+
 ### Collection Iteration
 
 ```yaml

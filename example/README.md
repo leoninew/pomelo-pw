@@ -30,6 +30,7 @@ pomelo-pw run example/public/data-driven-pages.yaml --var base_url=https://stagi
 | `public/runtime-results.yaml` | Typed results, structured args, nested result references | Yes, offline |
 | `public/structured-conditions.yaml` | Data/page/JS conditions, short circuits, fresh while results | Yes, offline |
 | `public/collection-iteration.yaml` | Serial arrays, nested bindings, source snapshots, scope restoration | Yes, offline |
+| `public/page-condition-wait.yaml` | Combined SPA readiness, native JS waits, structured args | Yes, offline |
 | `public/visual-regression.yaml` | Screenshot baseline comparison | Yes, with Pillow |
 
 ## Runtime Results
@@ -51,6 +52,16 @@ uv run --locked --no-sync pomelo-pw run example/public/structured-conditions.yam
 ```
 
 Conditions are objects such as `eq: ["{{results.counter}}", 3]` or `page: {element_visible: "h1"}`. Use `all`, `any`, and `not` to combine them. Old condition strings must be migrated to objects; custom JS predicates use a function under `js.script` and structured `js.args`.
+
+## Page Condition Waits
+
+`public/page-condition-wait.yaml` changes the hash route immediately and refreshes a row after a short timer. It waits for the route, visible row and matching data together, then uses a native JS wait in a nested branch. Its final summary checks both pages and the omitted/null argument contract before capturing `ready.png`.
+
+```bash
+uv run --locked --no-sync pomelo-pw run example/public/page-condition-wait.yaml --headless -v
+```
+
+Use one mode per wait; combine observations under condition rather than mixing selector, URL and delay fields. Positive timeout/interval values are milliseconds. False conditions continue checking; predicate errors fail immediately.
 
 ## Collection Iteration
 

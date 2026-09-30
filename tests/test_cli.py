@@ -1,8 +1,11 @@
 """Tests for browser command dispatch."""
 
+import json
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from click.testing import CliRunner
 
 from pomelo_pw import __version__
@@ -70,6 +73,72 @@ class TestBrowserCommands:
 class TestRunCommand:
     """Tests for flow runtime option dispatch."""
 
+    def test_run_json_success_exits_zero(self) -> None:
+        payload = {"success": True, "steps_executed": 2, "screenshots": ["ready.png"]}
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            Path("sample.yaml").write_text("steps: []\n", encoding="utf-8")
+            with patch("pomelo_pw.cli.FlowExecutor") as executor_class:
+                executor_class.return_value.run_flow = AsyncMock(return_value=payload)
+                result = runner.invoke(cli, ["run", "sample.yaml", "--json"])
+
+        assert result.exit_code == 0
+        assert json.loads(result.stdout) == payload
+        assert result.stderr == ""
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {
+                "success": False,
+                "steps_executed": 1,
+                "screenshots": [],
+                "failed_step": {
+                    "index": 1,
+                    "type": "wait",
+                    "error": "Condition timed out after 25ms",
+                    "context": {"screenshot": "error-step-2.png", "html_snapshot": "error-step-2.html"},
+                },
+            },
+            {
+                "success": False,
+                "data_driven": True,
+                "rows_total": 2,
+                "rows_passed": 1,
+                "rows_failed": 1,
+                "screenshots": [],
+                "row_results": [
+                    {"success": True, "row": "first"},
+                    {"success": False, "row": "second", "failed_step": {"error": "Row failed"}},
+                ],
+            },
+        ],
+        ids=["flow", "data-driven"],
+    )
+    def test_run_json_failure_exits_one_preserving_result(self, payload: dict[str, Any]) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            Path("sample.yaml").write_text("steps: []\n", encoding="utf-8")
+            with patch("pomelo_pw.cli.FlowExecutor") as executor_class:
+                executor_class.return_value.run_flow = AsyncMock(return_value=payload)
+                result = runner.invoke(cli, ["run", "sample.yaml", "--json"])
+
+        assert result.exit_code == 1
+        assert json.loads(result.stdout) == payload
+        assert result.stderr == ""
+
+    def test_run_json_exception_exits_one_preserving_error(self) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            Path("sample.yaml").write_text("steps: []\n", encoding="utf-8")
+            with patch("pomelo_pw.cli.FlowExecutor") as executor_class:
+                executor_class.return_value.run_flow = AsyncMock(side_effect=ValueError("Invalid wait condition"))
+                result = runner.invoke(cli, ["run", "sample.yaml", "--json"])
+
+        assert result.exit_code == 1
+        assert json.loads(result.stdout) == {"success": False, "error": "Invalid wait condition"}
+        assert result.stderr == ""
+
     def test_run_reports_data_driven_summary(self) -> None:
         runner = CliRunner()
         with runner.isolated_filesystem():
@@ -135,3 +204,32 @@ class TestRunCommand:
 
         assert result.exit_code == 0
         assert executor_class.return_value.run_flow.call_args.kwargs["headless"] is True
+
+
+class TestValidateCommand:
+    """Validation failures are visible to both people and calling processes."""
+
+    @pytest.mark.parametrize(
+        ("valid", "json_output"),
+        [(True, True), (False, False), (False, True)],
+        ids=["valid-json", "invalid-text", "invalid-json"],
+    )
+    def test_validate_exit_status_matches_report(self, valid: bool, json_output: bool) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            Path("sample.yaml").write_text("steps: []\n" if valid else "steps:\n  - type: wait\n", encoding="utf-8")
+            result = runner.invoke(cli, ["validate", "sample.yaml", *(["--json"] if json_output else [])])
+
+        assert result.exit_code == (0 if valid else 1)
+        assert result.stderr == ""
+        if json_output:
+            payload = json.loads(result.stdout)
+            assert payload["valid"] is valid
+            if valid:
+                assert payload["errors"] == []
+            else:
+                assert payload["errors"]
+                assert "steps[0] (wait)" in payload["errors"][0]
+        else:
+            assert "Validation failed:" in result.stdout
+            assert "steps[0] (wait)" in result.stdout

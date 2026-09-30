@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Any
 
 from pomelo_pw.runtime import NO_OUTPUT, JsonValue, snapshot_json
@@ -36,11 +37,52 @@ CALL_FUNCTION = """async ({script, hasArgs, args}) => {
     return result;
 }"""
 
+# Playwright polls synchronously; promises must settle into state before returning true.
+WAIT_FOR_BOOLEAN = """payload => {
+    const state = payload.waitState ??= {pending: false, ready: false, error: null};
+    if (state.error !== null) throw state.error;
+    if (state.ready) return true;
+    if (state.pending) return false;
+    const fn = (0, eval)('(' + payload.script + '\\n)');
+    if (typeof fn !== 'function') throw new Error('script must be a function expression');
+    const check = value => {
+        if (typeof value !== 'boolean') throw new Error('JS predicate must return a boolean');
+        return value;
+    };
+    const result = payload.hasArgs ? fn(JSON.parse(payload.args)) : fn();
+    if (result === null || result === undefined || typeof result.then !== 'function') {
+        return check(result);
+    }
+    state.pending = true;
+    Promise.resolve(result).then(value => {
+        state.ready = check(value);
+        state.pending = false;
+    }).catch(error => {
+        state.error = error instanceof Error ? error : new Error(String(error));
+        state.pending = false;
+    });
+    return false;
+}"""
 
-async def call_browser_function(page: Page, script: str, args: Any = NO_OUTPUT) -> JsonValue:
-    payload = {
+
+def _function_payload(script: str, args: Any) -> dict[str, Any]:
+    return {
         "script": script.strip(),
         "hasArgs": args is not NO_OUTPUT,
         "args": snapshot_json(None if args is NO_OUTPUT else args),
     }
-    return snapshot_json(await page.evaluate(CALL_FUNCTION, payload))
+
+
+async def call_browser_function(page: Page, script: str, args: Any = NO_OUTPUT) -> JsonValue:
+    return snapshot_json(await page.evaluate(CALL_FUNCTION, _function_payload(script, args)))
+
+
+async def wait_for_browser_function(
+    page: Page, script: str, args: Any = NO_OUTPUT, *, timeout: float, interval: float
+) -> None:
+    """Wait for a strict boolean predicate using Playwright's navigation-aware task."""
+    payload = _function_payload(script, args)
+    # The wait API recursively removes None from dictionaries before serializing them.
+    payload["args"] = json.dumps(payload["args"], ensure_ascii=False)
+    handle = await page.wait_for_function(WAIT_FOR_BOOLEAN, arg=payload, timeout=timeout, polling=interval)
+    await handle.dispose()
