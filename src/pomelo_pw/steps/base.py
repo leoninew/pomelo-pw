@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from pomelo_pw.polling import PollProgress
 from pomelo_pw.runtime import IDENTIFIER, NO_OUTPUT, JsonValue, NoOutput, RuntimeContext, validate_inputs
 
 if TYPE_CHECKING:
@@ -38,6 +39,7 @@ class StepContext:
     screenshots: list[str]
     scopes: tuple[dict[str, Any], ...] = ()
     bindings: dict[str, Any] = field(default_factory=dict)
+    polls: tuple[PollProgress, ...] = ()
 
     @property
     def inputs(self) -> dict[str, Any]:

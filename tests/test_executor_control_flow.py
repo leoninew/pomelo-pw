@@ -194,17 +194,18 @@ class TestExecuteLoop:
 
         executor._execute_steps = fake_execute_steps  # type: ignore[method-assign]
 
-        # Condition always true → should stop at max_iterations
+        # A true condition at the safety limit must fail.
         ctx = _make_context(url="https://example.com")
-        await executor._execute_loop(
-            loop_data={
-                "type": "while",
-                "condition": {"page": {"url_contains": "example.com"}},
-                "max_iterations": 3,
-                "steps": [],
-            },
-            context=ctx,
-        )
+        with pytest.raises(RuntimeError, match="exhausted max_iterations=3"):
+            await executor._execute_loop(
+                loop_data={
+                    "type": "while",
+                    "condition": {"page": {"url_contains": "example.com"}},
+                    "max_iterations": 3,
+                    "steps": [],
+                },
+                context=ctx,
+            )
 
         assert call_count == 3
 

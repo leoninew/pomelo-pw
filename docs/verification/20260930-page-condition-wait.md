@@ -1,13 +1,13 @@
 # T04 页面条件等待验证
-最后修改时间: 2026-09-30 20:08:02
+最后修改时间: 2026-10-01 22:10:35
 
 ## Review status
 
-Draft
+Accepted
 
 ## Flow mode and stage
 
-标准模式 / standard，验证阶段 / Verification。Intent/Plan 已接受，Implementation 已交付；用户明确要求“进行验证”，本轮执行针对性回归和离线最小集成。技术检查完成，本文待用户审阅，不自动推进 T05。
+标准模式 / standard，Verification 已接受。针对性回归和离线最小集成已完成，用户要求分两批提交且不再测试；T04 已提交为 4d98eac，随后用户明确继续推进任务，视为接受本项验收并进入 T05。不新增测试证据。
 
 ## Intent alignment
 
@@ -96,7 +96,7 @@ uv run --locked --no-sync pytest tests/test_cli.py::TestRunCommand tests/test_cl
 
 ## Risks and incomplete items
 
-- 没有必须修复的 T04 遗留项；Verification 审查状态待用户接受。
+- 没有必须修复的 T04 遗留项；用户要求提交并继续任务，Verification 已接受。
 - 多节点探测不是页面状态的原子快照，条件满足后页面仍可能改变。interval 控制组合和 JS，page 叶节点遵循 Playwright 内置节奏。
 - 毫秒截止时间不是硬实时保证，浏览器响应/事件循环调度存在少量开销；本轮记录了真实耗时。
 - 等待超时不会强制终止页面用户函数；在途探测最终结束或页面关闭时消费结果。JS 谓词应只观察页面，不承担写操作。
@@ -104,4 +104,4 @@ uv run --locked --no-sync pytest tests/test_cli.py::TestRunCommand tests/test_cl
 
 ## Conclusion
 
-限定范围内技术验证通过，T04 可交付用户验收。本轮发现的问题已修正并针对性回归；当前停在 Verification，不自动推进 T05，也不自动暂存或提交。
+限定范围内技术验证通过，用户已接受并要求继续任务。验收发现的问题已修正并针对性回归；T04 已提交，本轮没有追加测试。

@@ -130,7 +130,7 @@ steps:
 
 `evaluate.script` 必须是同步或 async 函数表达式，源码保持原文。通过 `args` 传递单个 JSON 载荷；未提供 args 时不传参数，`args: null` 则传入一个 null 参数。函数必须明确返回 JSON 值，不需要数据时可 `return null`；不支持的类型、非有限数字和循环数据会报错。
 
-只有产生公开输出的步骤支持 `save_as`，当前为 `evaluate`。成功后保存结果快照，再次成功写入会覆盖。替换时参数可以读取上一次值，但失败会使该绑定失效。嵌套步骤共享结果，data 行之间隔离。子步骤执行时才解析参数，子步骤局部变量不会泄漏给兄弟步骤。结果字符串始终作为数据，不重新解释为模板。`output_dir` 在运行前解析，只能读取输入。
+只有产生公开输出的步骤支持 `save_as`，当前为 `evaluate` 和 `poll`。成功后保存结果快照，再次成功写入会覆盖。替换时参数可以读取上一次值，但失败会使该绑定失效。嵌套步骤共享结果，data 行之间隔离。子步骤执行时才解析参数，子步骤局部变量不会泄漏给兄弟步骤。结果字符串始终作为数据，不重新解释为模板。`output_dir` 在运行前解析，只能读取输入。
 
 这是不提供兼容适配的接口变更：裸模块代码改为函数，源码中的输入插值改为 `args`；完整引用不再强制转成字符串。Python 步骤实现改用 `StepContext.runtime`/`inputs` 和 `StepResult.output`、`control`、`diagnostics`，移除原 `variables` 和 `StepResult.data`。可直接运行[离线示例](example/public/runtime-results.yaml)。
 
@@ -176,6 +176,30 @@ steps:
 
 每个 wait 必须且只能选择 condition、delay、selector、url、url_contains、url_pattern、for、network_idle、animation_stable 或 route_stable 之一。interval 仅用于 condition（默认 100ms），state 仅用于 selector，route_stable_duration 仅用于 route_stable。timeout 默认 30000ms；时间参数为正且有限的数字，delay 可以为 0。支持完整类型化引用，拒绝字符串数字和布尔值；开关模式必须为 true。混合模式直接校验失败，没有适配。动画稳定改为观察正在运行的 Web Animations，不根据 CSS 声明时长判断。
 
+### 有界步骤轮询
+
+```yaml
+- type: poll
+  until: {in: ["{{results.task.status}}", [ready, failed]]}
+  timeout: 30000
+  interval: 1000
+  max_attempts: 20
+  save_as: polling
+  steps:
+    - type: evaluate
+      args: {id: "{{results.submitted.id}}"}
+      script: "async ({id}) => { const r = await fetch('/tasks/' + id); if (!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); }"
+      save_as: task
+      retry: 2
+      retry_delay: 250
+```
+
+`poll` 立即执行非空轮询体，再使用本轮新结果判断 until；false 时从本轮完成起等待 interval，然后再查询。timeout 默认 30000ms，interval 默认 1000ms，均为正且有限的数字；可选 max_attempts 为正整数，均支持完整类型化引用。总时限覆盖步骤、条件、子步骤重试和等待，嵌套轮询不能延长外层预算。耗尽明确失败，最后一轮恰好满足时正常成功。
+
+读取重试在对应子步骤声明，poll 拒绝自身 retry 参数。业务失败终态可以满足 until，之后通过分支判断业务结果。可选 save_as 保存 `{attempts, elapsed_ms, results}`，results 为轮询体最近成功发布的绑定。失败时将最近结果、条件、时限、阶段及嵌套路径保留在 `failed_step.diagnostics.polls`。`on_error: continue` 继续后续步骤，但最终仍报告流程失败。
+
+提交操作放在轮询之前。超时后不启动新步骤或重试，不发布迟到结果；已经发出的浏览器操作可能继续完成，迟到异常会被消费，轮询不撤回副作用。可自行运行[离线轮询示例](example/public/bounded-step-polling.yaml)。
+
 ### 集合遍历
 
 ```yaml
@@ -191,7 +215,7 @@ steps:
 
 `foreach` 按顺序遍历 JSON 数组快照，空数组不执行子步骤。`as` 默认为 `item`，`index_as` 默认为 `index`，索引从 0 开始；名称必须是不同的非保留 ASCII 标识符。迭代绑定优先于普通变量和 CLI 覆盖，数据不会再次解析成模板；内层循环退出后恢复外层绑定。回写源结果不会改变本次遍历范围。可直接运行[离线集合示例](example/public/collection-iteration.yaml)。
 
-`loop` 必须且只能提供 `times`（非负整数）或 `while`；`max_iterations` 为正整数，仅允许与 while 使用。次数和上限支持完整类型化引用。原 foreach 次数/条件调用必须改用 loop。父 if/loop/foreach 的 retry 仅覆盖自身判断或准备，子步骤失败不会重放已经完成的控制体；需要重试的操作应在对应子步骤声明。嵌套错误包含步骤路径和集合索引。
+`loop` 必须且只能提供 `times`（非负整数）或 `while`；`max_iterations` 为正整数，仅允许与 while 使用。次数和上限支持完整类型化引用。最后一轮结束后重新判断 while：false 正常完成，仍为 true 则耗尽失败，不适配原成功退出语义。原 foreach 次数/条件调用必须改用 loop。父 if/loop/foreach 的 retry 仅覆盖自身判断或准备，子步骤失败不会重放已经完成的控制体；需要重试的操作应在对应子步骤声明。嵌套错误包含步骤路径和集合索引。
 
 ### 编写 Flow
 
@@ -232,6 +256,7 @@ steps:
 | `check`、`uncheck` | `selector` | 控制复选框 |
 | `save-state`、`load-state` | `file` | 复用已认证的浏览器状态 |
 | `if`、`loop` | 条件或迭代配置 | 表达分支和重复操作 |
+| `poll` | `until`、`steps` | 在统一时限内刷新数据并检查终态 |
 | `foreach` | `items`、`steps`，可选 `as` / `index_as` | 遍历数组，提供局部元素和索引绑定 |
 | `evaluate` | `script`，可选 `args` 和 `save_as` | 执行页面函数并传递 JSON 数据 |
 | `scroll`、`set-viewport` | 各步骤参数 | 调整滚动位置或视口 |

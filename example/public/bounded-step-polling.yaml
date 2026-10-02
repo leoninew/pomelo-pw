@@ -1,0 +1,81 @@
+name: bounded-step-polling
+description: Offline serial task polling with refreshed results and terminal business outcomes.
+headless: false
+output_dir: output/bounded-step-polling
+steps:
+  - type: evaluate
+    save_as: jobs
+    print_result: false
+    script: |
+      () => {
+        document.body.innerHTML = `
+          <main style="font:16px Arial;padding:24px;max-width:720px">
+            <h1>Task processing</h1>
+            <ul id="outcomes"></ul>
+            <p id="summary"></p>
+          </main>`;
+        return [{id: 'a', terminal: 'ready'}, {id: 'b', terminal: 'failed'}];
+      }
+  - type: evaluate
+    script: '() => []'
+    save_as: outcomes
+    print_result: false
+  - type: foreach
+    items: '{{results.jobs}}'
+    as: job
+    steps:
+      - type: evaluate
+        args: '{{job}}'
+        save_as: submitted
+        print_result: false
+        script: 'job => ({id: job.id, terminal: job.terminal, polls: 0})'
+      - type: poll
+        until: {in: ['{{results.task.status}}', [ready, failed]]}
+        timeout: 2000
+        interval: 50
+        max_attempts: 3
+        save_as: polling
+        steps:
+          - type: evaluate
+            args: '{{results.submitted}}'
+            save_as: submitted
+            print_result: false
+            script: 'task => ({...task, polls: task.polls + 1})'
+          - type: evaluate
+            args: '{{results.submitted}}'
+            save_as: task
+            print_result: false
+            script: 'task => ({id: task.id, status: task.polls === 3 ? task.terminal : "processing"})'
+      - type: evaluate
+        args:
+          task: '{{results.task}}'
+          polling: '{{results.polling}}'
+          outcomes: '{{results.outcomes}}'
+        save_as: outcomes
+        print_result: false
+        script: |
+          ({task, polling, outcomes}) => {
+            if (polling.attempts !== 3 || polling.results.task.status !== task.status) {
+              throw new Error('Polling did not use the latest round results');
+            }
+            const item = {id: task.id, status: task.status, attempts: polling.attempts};
+            outcomes.push(item);
+            const row = document.createElement('li');
+            row.textContent = `${item.id}: ${item.status} (${item.attempts})`;
+            document.querySelector('#outcomes').append(row);
+            return outcomes;
+          }
+  - type: evaluate
+    args: '{{results.outcomes}}'
+    save_as: summary
+    script: |
+      outcomes => {
+        if (outcomes.length !== 2 || outcomes[0].status !== 'ready' || outcomes[1].status !== 'failed') {
+          throw new Error('Incorrect serial task outcomes');
+        }
+        const summary = {total: outcomes.length, ready: 1, failed: 1};
+        document.querySelector('#summary').textContent = JSON.stringify(summary);
+        return summary;
+      }
+  - type: screenshot
+    file: tasks.png

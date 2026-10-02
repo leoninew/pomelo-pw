@@ -1,5 +1,5 @@
 # P0/P1 流程能力任务系列
-最后修改时间: 2026-09-30 20:08:02
+最后修改时间: 2026-10-02 09:51:08
 
 ## Review status
 
@@ -7,9 +7,9 @@ Accepted
 
 ## Flow mode and stage
 
-标准模式 / standard，系列意图 / Intent 已接受；T01 验证已接受，T02 已交付并由用户提交，T03/T04 Implementation 已交付，当前 Verification 技术检查通过，验收文档为 Draft 待用户审阅，不自动推进 T05。
+标准模式 / standard，系列意图 / Intent 已接受；T01-T04 已交付，T03/T04 分别提交为 a02b2f3 与 4d98eac，Verification 已接受。T05 Implementation 已交付，Verification 技术检查通过，文档为 Draft 待用户审阅，不自动推进 T06。
 
-本系列按独立任务推进 Intent -> Plan -> Implementation -> Verification。系列拆分、T01 各审查阶段及 T02-T04 Intent/Plan 已接受；T05-T09 仍处于 Intent 草稿。各任务进入下一阶段时，在对应阶段目录使用相同文件名；系列入口的接受不自动表示所有任务的 Plan 或实现已经接受。
+本系列按独立任务推进 Intent -> Plan -> Implementation -> Verification。系列拆分、T01 各审查阶段及 T02-T05 Intent/Plan 已接受；T06-T09 仍处于 Intent 草稿。各任务进入下一阶段时，在对应阶段目录使用相同文件名；系列入口的接受不自动表示所有任务的 Plan 或实现已经接受。
 
 ## Background
 
@@ -29,7 +29,7 @@ Pomelo PW 已提供导航、交互、等待、条件、循环和 evaluate，但�
 - 不纳入 P2/P3 的外部脚本、子流程、专用分页封装、检查点恢复和并发调度。
 - 不为教材或 MinerU 增加专属步骤，不接管业务任务队列。
 - 不以消灭所有 JS 或达到指定 YAML 行数作为目标；特殊页面逻辑和少量转换可继续使用 evaluate。
-- 不修改相邻 K12 仓库，不执行真实批量解析，不启动或调整其开发服务器。
+- 除用户本轮明确指定的材料脚本 v4 改写外，不修改相邻 K12 仓库；不执行真实批量解析，不启动或调整其开发服务器。
 - 系列入口负责意图与任务边界；各任务按阶段单独推进，未获阶段授权前不写产品代码或 Verification 文档。
 
 ## User scenarios
@@ -87,7 +87,7 @@ Pomelo PW 已提供导航、交互、等待、条件、循环和 evaluate，但�
 ## Decisions
 
 - 所有任务采用用户指定的标准模式，不因任务较小改用轻量模式。
-- 只使用 Draft / Accepted 作为阶段审查状态；当前为 T01 Verification Accepted、T02-T04 Intent/Plan Accepted，其余任务 Intent 为 Draft。
+- 只使用 Draft / Accepted 作为阶段审查状态；当前为 T01/T03/T04 Verification Accepted、T02-T05 Intent/Plan Accepted，T06-T09 Intent 为 Draft。
 - 采用现有 Playwright 能力处理浏览器等待、DOM 定位和请求；不自建通用 JS/Python 表达式引擎。
 - 嵌套校验、参数解析时机和重试边界归入相关基础任务，不另立无关的全项目重构任务。
 - 用户明确“不做兼容适配”。各任务以新契约正确性为目标；必要的旧接口移除和仓库内调用迁移纳入对应任务，外部调用方迁移另行处理。
@@ -116,3 +116,7 @@ Pomelo PW 已提供导航、交互、等待、条件、循环和 evaluate，但�
 - T03 首轮相关回归 280 项通过，之后用户要求推进下一步并自行测试，随后明确继续。T03 收尾和相关 9 个 Python 文件静态检查通过；按 [T04 Plan](../plan/20260930-page-condition-wait.md) 完成页面条件等待实现，本轮后续不运行回归或浏览器试跑。T04 仅静态检查通过，交由用户测试；不创建正式 Verification，不自动推进 T05。
 - 用户随后要求“进行验证”。T03/T04 的 8 个相关测试文件最终 370 项通过，两个离线 example、v2 三个受控场景及真实浏览器边界/失败证据通过。验证中修正示例导航和等待超时取消处理，没有扩大到全量测试或真实业务；[T03 Verification](../verification/20260930-collection-iteration.md)、[T04 Verification](../verification/20260930-page-condition-wait.md) 技术结论通过，文档待用户审阅。
 - 用户指出验收发现的问题应分析并解决，随后要求“不追求极致的覆盖率”。追加修复 run --json 与 validate 失败退出 0、原生 JS 的 Promise 真值误判及 null 参数丢失，相关回归最终 66 项通过，真实 CLI 与原生等待最小集成通过；退出码问题已当轮解决，没有推迟到 T08。T03/T04 Verification 仍为 Draft，不自动推进 T05。
+- 用户要求 T03/T04 分两批先后提交，并明确不再测试；已完成 a02b2f3 与 4d98eac 两次提交。随后要求继续推进任务，接受 T03/T04 Verification 并进入 T05；沿用无未决事项时开始实现，T05 Intent/Plan Accepted。本轮不运行测试，可用后停止供用户自行测试，不自动推进 T06。
+- 用户追加前置要求，将 K12 的原始材料脚本改写为 material-parse-all-v4.yaml；新文件使用已提交的结果/foreach/页面条件等待能力，静态校验通过后被移至本项目 dist，按当前位置保留。随后完成 T05 的 poll、嵌套预算/失败诊断、while 耗尽及继续执行失败汇总，相关 7 个 Python 文件静态检查与离线示例校验通过；未运行测试。交付记录见 [T05 Plan](../plan/20260930-bounded-step-polling.md)，当前停止待用户试跑。
+- 用户随后要求开始验证，当前进入 T05 Verification；只运行针对性回归和离线最小集成，不执行真实业务或全量测试，发现缺陷当轮修复。
+- T05 的 120 项相关回归、离线 polling 示例、两个真实 CLI 失败场景及两个真实浏览器异步超时场景通过；7 个变更 Python 文件静态检查及 v4 静态校验通过。未发现产品代码缺陷，未执行全量测试或真实材料业务；[T05 Verification](../verification/20260930-bounded-step-polling.md) 为 Draft，当前停止待用户审阅。

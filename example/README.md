@@ -31,6 +31,7 @@ pomelo-pw run example/public/data-driven-pages.yaml --var base_url=https://stagi
 | `public/structured-conditions.yaml` | Data/page/JS conditions, short circuits, fresh while results | Yes, offline |
 | `public/collection-iteration.yaml` | Serial arrays, nested bindings, source snapshots, scope restoration | Yes, offline |
 | `public/page-condition-wait.yaml` | Combined SPA readiness, native JS waits, structured args | Yes, offline |
+| `public/bounded-step-polling.yaml` | Serial query rounds, fresh results, terminal outcomes and budgets | Yes, offline |
 | `public/visual-regression.yaml` | Screenshot baseline comparison | Yes, with Pillow |
 
 ## Runtime Results
@@ -72,6 +73,16 @@ uv run --locked --no-sync pomelo-pw run example/public/collection-iteration.yaml
 ```
 
 `foreach` accepts `items` and `steps`, with optional `as`/`index_as` aliases. It snapshots the array and provides isolated, zero-based bindings. Child retries do not restart the traversal; old foreach count/while calls must use `loop`.
+
+## Bounded Step Polling
+
+`public/bounded-step-polling.yaml` runs two offline tasks through foreach and poll. Each task reaches its terminal state on the third round; ready and failed both end polling, then the final summary counts their business outcomes and writes `tasks.png`.
+
+```bash
+uv run --locked --no-sync pomelo-pw run example/public/bounded-step-polling.yaml --headless -v
+```
+
+Poll requires a non-empty steps body and a structured until condition. The first round is immediate; interval is measured after each unsuccessful round. Timeout covers queries, conditions, retries and delays. Use child retries for reads and keep submissions outside poll. Successful save_as includes attempts, elapsed_ms and the body's latest successful bindings; exhausted limits fail. While also fails if its condition remains true after max_iterations.
 
 ## Browser Interactions
 

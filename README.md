@@ -130,7 +130,7 @@ steps:
 
 `evaluate.script` is a synchronous or async function expression, kept as literal source. Pass one JSON payload through `args`; omitted args calls the function with no arguments, while `args: null` passes one null argument. Return a JSON value explicitly (use `return null` when no data is needed). Unsupported values, nonfinite numbers, and circular data fail.
 
-Only output-producing steps support `save_as` (currently `evaluate`). A successful step publishes a copied result; another successful write replaces it. During replacement, arguments can read the previous value, but a failed attempt leaves the binding absent. Results are shared by nested steps and isolated between data rows. Child parameters resolve when the child executes; child variables do not leak into siblings. Returned strings are data and are never reinterpreted as templates. `output_dir` resolves before execution and can only use inputs.
+Only output-producing steps support `save_as` (currently `evaluate` and `poll`). A successful step publishes a copied result; another successful write replaces it. During replacement, arguments can read the previous value, but a failed attempt leaves the binding absent. Results are shared by nested steps and isolated between data rows. Child parameters resolve when the child executes; child variables do not leak into siblings. Returned strings are data and are never reinterpreted as templates. `output_dir` resolves before execution and can only use inputs.
 
 This is a breaking contract change with no compatibility adapters. Migrate bare module bodies to functions and source interpolation to `args`. Complete references no longer force values to strings. Python step implementations use `StepContext.runtime`/`inputs` and `StepResult.output`, `control`, and `diagnostics`; `variables` and `StepResult.data` are removed. See [the offline example](example/public/runtime-results.yaml).
 
@@ -176,6 +176,30 @@ For custom predicates, use `js: {script: "({flag}) => flag === false", args: {fl
 
 Each wait must choose exactly one mode: `condition`, `delay`, `selector`, `url`, `url_contains`, `url_pattern`, `for`, `network_idle`, `animation_stable`, or `route_stable`. `interval` applies only to condition (default 100ms), `state` only to selector, and `route_stable_duration` only to route_stable. Timeout defaults to 30000ms; timing values must be finite and positive, except delay may be zero. Complete typed references are allowed; string numbers and booleans are rejected. Flag modes require true. Mixed modes fail validation without adapters. Animation stability observes active Web Animations rather than declared CSS durations.
 
+### Bounded Step Polling
+
+```yaml
+- type: poll
+  until: {in: ["{{results.task.status}}", [ready, failed]]}
+  timeout: 30000
+  interval: 1000
+  max_attempts: 20
+  save_as: polling
+  steps:
+    - type: evaluate
+      args: {id: "{{results.submitted.id}}"}
+      script: "async ({id}) => { const r = await fetch('/tasks/' + id); if (!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); }"
+      save_as: task
+      retry: 2
+      retry_delay: 250
+```
+
+`poll` executes its non-empty body immediately, then checks `until` against fresh results. False waits `interval` after the round before the next query. Timeout defaults to 30000ms and interval to 1000ms; both must be finite positive numbers. Optional `max_attempts` is a positive integer; all bounds accept complete typed references. Timeout includes body steps, conditions, child retries and delays, and nested polls share the outer deadline. Exhaustion fails; a true condition on the final allowed round succeeds.
+
+Declare retries on individual queries; poll rejects parent retry parameters. A terminal business failure can satisfy until and is handled by later branches. Optional `save_as` stores `{attempts, elapsed_ms, results}`, with the latest successful bindings produced by the body. Failures retain those results, condition, timing, phase and nested path under `failed_step.diagnostics.polls`. `on_error: continue` runs later steps but still reports a failed flow.
+
+Keep submissions before poll. At timeout, no new steps or retries start and late results are discarded; already-issued browser operations may finish and their errors are consumed. Polling does not undo side effects. See [the offline polling example](example/public/bounded-step-polling.yaml).
+
 ### Collection Iteration
 
 ```yaml
@@ -191,7 +215,7 @@ Each wait must choose exactly one mode: `condition`, `delay`, `selector`, `url`,
 
 `foreach` visits a snapshot of a JSON array in order; an empty array executes no children. `as` defaults to `item` and `index_as` to `index`, starting at zero. Names must be distinct, non-reserved ASCII identifiers. Iteration bindings take precedence over ordinary variables and CLI overrides, remain opaque data, and restore outer bindings after nested iterations. Rewriting the source result does not change an active traversal. See [the offline collection example](example/public/collection-iteration.yaml).
 
-`loop` requires exactly one of `times` (a nonnegative integer) or `while`; `max_iterations` is a positive integer allowed only with `while`. Both counts support complete typed references. Old `foreach` count/while calls must use `loop`. Parent `if`/`loop`/`foreach` retries cover only the parent's own probe or setup; child failures never replay completed bodies. Declare retries on the child operation that needs them. Nested errors include the step path and collection index.
+`loop` requires exactly one of `times` (a nonnegative integer) or `while`; `max_iterations` is a positive integer allowed only with `while`. Both counts support complete typed references. After the final allowed while iteration, the condition is checked again: false completes, true fails with exhaustion. Old `foreach` count/while calls must use `loop`; no successful-exhaustion adapter is provided. Parent `if`/`loop`/`foreach` retries cover only the parent's own probe or setup; child failures never replay completed bodies. Declare retries on the child operation that needs them. Nested errors include the step path and collection index.
 
 ### Author Flows
 
@@ -232,6 +256,7 @@ steps:
 | `check`, `uncheck` | `selector` | Control checkboxes |
 | `save-state`, `load-state` | `file` | Reuse authenticated browser state |
 | `if`, `loop` | condition or iteration settings | Model branches and repeated actions |
+| `poll` | `until`, `steps` | Refresh results within a shared deadline |
 | `foreach` | `items`, `steps`, optional `as` / `index_as` | Traverse an array with local item and index bindings |
 | `evaluate` | `script`, optional `args` and `save_as` | Run a browser function and pass JSON data |
 | `scroll`, `set-viewport` | step-specific parameters | Adjust scroll position or viewport |

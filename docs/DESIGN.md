@@ -1,5 +1,5 @@
 # Pomelo PW - Flow-based UI Automation Tool
-最后修改时间: 2026-09-30 20:08:02
+最后修改时间: 2026-10-01 21:57:26
 
 ## 项目概述
 
@@ -28,6 +28,7 @@ pomelo-pw/
 │       ├── executor.py      # 流程执行器
 │       ├── runtime.py       # 运行时输入和结果快照
 │       ├── conditions.py    # 共享条件校验和求值
+│       ├── polling.py       # 轮询预算、进度和失败诊断
 │       ├── browser_functions.py # 浏览器函数及 JSON 传输
 │       ├── substitution.py  # 变量替换
 │       ├── config/          # 配置管理
@@ -139,7 +140,19 @@ Playwright 原生轮询同步判断谓词返回值，包装器必须返回实际
 
 WaitStep 按字段存在性校验恰好一种原生模式，拒绝多模式、null 开关、非法枚举、字符串数字和无效范围；state、interval、route_stable_duration 限定对应模式。不做优先级适配或旧条件转换。animation_stable 使用 document.getAnimations() 观察运行中或 pending 的动画。页面等待不执行查询步骤、不更新结果，数据刷新轮询属于 T05。
 
-### 6. 流程执行
+### 6. 有界步骤轮询
+
+`poll` 的 until 为原文共享条件树，steps 是非空延迟解析控制体；首次立即查询，每轮完整执行后获取新快照判断终止条件。interval 从未满足的一轮完成时起计算，不并发启动新查询。timeout 使用单调时钟，max_attempts 为可选附加上限；最后一轮条件满足仍成功。
+
+`StepContext.polls` 传递各层 PollProgress。执行器在步骤、重试和探测前后检查最早截止时间；asyncio.timeout_at 覆盖控制体、条件、retry_delay 和 interval，原生 timeout 按剩余预算收紧。控制体仍在父步骤重试边界之外，poll 拒绝父 retry，只允许子查询显式重试。foreach 和分支保留作用域、绑定及预算。
+
+在途单步骤和条件探测通过 shield 保留协议调用并消费迟到异常，结果发布和控制体调度留在调用端；超时后不开始新操作或发布迟到结果。页面 JS 和已经发出的浏览器操作可能继续完成，不提供副作用撤销或幂等性推断。
+
+每次轮询体成功发布 save_as 时，为活动的各层轮询保存独立最近结果；失败重绑定仍按 T01 清除 runtime 绑定，但诊断保留之前成功的值。成功 poll 输出 attempts/elapsed_ms/results，可再次 save_as。PollError 沿嵌套路径保留各层诊断，顶层 failed_step.diagnostics.polls 包含条件、预算、阶段、路径和最近结果。on_error=continue 只影响是否继续调度，任何步骤失败后最终 success 仍为 false。
+
+while 在 max_iterations 后再检查一次条件，false 正常完成、true 明确耗尽失败。固定 times 不变；不保留旧耗尽成功语义的适配。业务失败终态可以正常结束 poll，由后续分支或断言确定业务结果。
+
+### 7. 流程执行
 
 `FlowExecutor` 负责加载、校验、执行流程：
 
@@ -179,6 +192,7 @@ WaitStep 按字段存在性校验恰好一种原生模式，拒绝多模式、nu
 | `check` | `selector` | 勾选复选框 |
 | `uncheck` | `selector` | 取消勾选 |
 | `evaluate` | `script` | 执行函数表达式，可用 args 传参、save_as 绑定 JSON 输出 |
+| `poll` | `until`, `steps` | 有界查询轮询，可用 save_as 绑定轮次、耗时和最近结果 |
 | `set-viewport` | - | 设置视口 |
 
 `select` 的 `value` 对应 option 的 HTML `value` 属性；`label` 对应用户可见的精确选项文本；`index` 对应从零开始的选项序号。三者必须且只能提供一个。

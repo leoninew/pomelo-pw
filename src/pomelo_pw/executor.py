@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import time
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +17,15 @@ from pomelo_pw.browser import BrowserLifecycle
 from pomelo_pw.conditions import evaluate_condition
 from pomelo_pw.config import load_app_config
 from pomelo_pw.error_context import ErrorContextCollector
+from pomelo_pw.polling import (
+    PollAttemptsExhausted,
+    PollDeadlineExceeded,
+    PollError,
+    PollProgress,
+    PollTimeoutError,
+    await_poll_operation,
+    check_poll_deadline,
+)
 from pomelo_pw.runtime import NO_OUTPUT, RuntimeContext, snapshot_json, validate_inputs
 from pomelo_pw.steps import get_step
 from pomelo_pw.steps.base import BaseStep, StepContext, StepResult
@@ -65,8 +76,28 @@ class FlowExecutor:
         last_error: Exception | None = None
 
         for attempt in range(max_retries + 1):
+            check_poll_deadline(step_context.polls)
+            operation_params = params
+            if (
+                step_context.polls
+                and step_instance.spec.name != "poll"
+                and "timeout" in step_instance.spec.optional_params
+            ):
+                remaining_ms = (
+                    min(poll.deadline for poll in step_context.polls) - asyncio.get_running_loop().time()
+                ) * 1000
+                timeout = params.get("timeout", step_instance.spec.optional_params["timeout"])
+                if isinstance(timeout, (int, float)) and not isinstance(timeout, bool) and math.isfinite(timeout):
+                    operation_params = {
+                        **params,
+                        "timeout": min(timeout, remaining_ms) if timeout > 0 else remaining_ms,
+                    }
             try:
-                result = await step_instance.execute(step_context, params)
+                for poll in step_context.polls:
+                    poll.phase = "body"
+                result = await await_poll_operation(
+                    partial(step_instance.execute, step_context, operation_params), step_context.polls
+                )
 
                 if result.success:
                     if attempt > 0:
@@ -77,11 +108,15 @@ class FlowExecutor:
                 # Step returned failure
                 if attempt < max_retries:
                     self._log(f"[{step_num}/{total_steps}] Attempt {attempt + 1} failed: {result.message}, retrying...")
+                    for poll in step_context.polls:
+                        poll.phase = "retry_delay"
                     await asyncio.sleep(retry_delay / 1000)
                     continue
 
                 return result
 
+            except PollDeadlineExceeded:
+                raise
             except Exception as e:
                 last_error = e
                 error_type = type(e).__name__.lower()
@@ -91,6 +126,8 @@ class FlowExecutor:
 
                 if attempt < max_retries and should_retry:
                     self._log(f"[{step_num}/{total_steps}] Attempt {attempt + 1} failed: {e}, retrying...")
+                    for poll in step_context.polls:
+                        poll.phase = "retry_delay"
                     await asyncio.sleep(retry_delay / 1000)
                     continue
 
@@ -111,6 +148,9 @@ class FlowExecutor:
         total_steps: int,
     ) -> StepResult:
         """Prepare one lexical scope, execute, and publish only successful output."""
+        check_poll_deadline(context.polls)
+        for poll in context.polls:
+            poll.step_path = step_num
         results = context.runtime.snapshot_results()
         save_as = step.get("save_as")
         if isinstance(save_as, str):
@@ -130,6 +170,7 @@ class FlowExecutor:
             screenshots=context.screenshots,
             scopes=(*context.scopes, step.get("variables", {})),
             bindings=context.bindings,
+            polls=context.polls,
         )
         raw_fields = {
             "type",
@@ -158,12 +199,17 @@ class FlowExecutor:
                 await self._execute_loop(result.control, step_context, prefix=f"{step_num}.")
             elif result.control.get("type") == "foreach":
                 await self._execute_foreach(result.control, step_context, prefix=f"{step_num}.")
+            elif result.control.get("type") == "poll":
+                result = await self._execute_poll(result.control, step_context, prefix=f"{step_num}.")
+            check_poll_deadline(context.polls)
             if result.output is not NO_OUTPUT:
                 result.output = snapshot_json(result.output)
             if save_as is not None:
                 if result.output is NO_OUTPUT:
                     raise ValueError(f"Step '{step['type']}' produced no output for save_as '{save_as}'")
                 context.runtime.publish(save_as, result.output)
+                for poll in context.polls:
+                    poll.results[save_as] = snapshot_json(result.output)
         return result
 
     async def _execute_steps(
@@ -183,8 +229,12 @@ class FlowExecutor:
                 result = await self._execute_step(step, context, step_num, len(steps))
                 if not result.success:
                     raise RuntimeError(result.message)
+            except PollDeadlineExceeded:
+                raise
             except Exception as error:
                 if prefix:
+                    if isinstance(error, PollError):
+                        raise type(error)(f"Step {step_num} ({step_type}): {error}", error.diagnostics) from error
                     raise RuntimeError(f"Step {step_num} ({step_type}): {error}") from error
                 raise
 
@@ -198,6 +248,7 @@ class FlowExecutor:
     ) -> None:
         """Run a stable collection snapshot with isolated, opaque bindings."""
         for index, item in enumerate(loop_data["items"]):
+            check_poll_deadline(context.polls)
             self._log(f"[{prefix}index-{index}] Foreach index {index}")
             iteration_context = StepContext(
                 page=context.page,
@@ -210,6 +261,7 @@ class FlowExecutor:
                     loop_data["as"]: snapshot_json(item),
                     loop_data["index_as"]: index,
                 },
+                polls=context.polls,
             )
             await self._execute_steps(loop_data["steps"], iteration_context, prefix=f"{prefix}index-{index}.")
 
@@ -226,6 +278,7 @@ class FlowExecutor:
         if loop_type == "times":
             iterations = loop_data["iterations"]
             for i in range(iterations):
+                check_poll_deadline(context.polls)
                 self._log(f"[{prefix}iter-{i + 1}] Loop iteration {i + 1}/{iterations}")
                 await self._execute_steps(
                     steps=steps,
@@ -239,13 +292,21 @@ class FlowExecutor:
 
             iteration = 0
 
-            while iteration < max_iterations:
+            while True:
                 # Evaluate condition
-                result = await evaluate_condition(context, condition, "while")
+                result = await await_poll_operation(
+                    lambda: evaluate_condition(context, condition, "while"), context.polls
+                )
 
                 if not result:
                     self._log(f"[{prefix}while] Condition '{condition}' is false, exiting loop")
                     break
+
+                if iteration >= max_iterations:
+                    raise RuntimeError(
+                        f"While loop exhausted max_iterations={max_iterations}; condition={condition!r}; "
+                        f"last_results={context.runtime.snapshot_results()!r}"
+                    )
 
                 iteration += 1
                 self._log(f"[{prefix}iter-{iteration}] Loop iteration {iteration} (while '{condition}')")
@@ -256,8 +317,77 @@ class FlowExecutor:
                     prefix=f"{prefix}iter-{iteration}.",
                 )
 
-            if iteration >= max_iterations:
-                self._log(f"[{prefix}while] Reached max iterations ({max_iterations}), exiting loop")
+    async def _execute_poll(self, poll_data: dict[str, Any], context: StepContext, prefix: str) -> StepResult:
+        check_poll_deadline(context.polls)
+        started = asyncio.get_running_loop().time()
+        deadline = min([started + poll_data["timeout"] / 1000, *(poll.deadline for poll in context.polls)])
+        progress = PollProgress(
+            path=prefix.rstrip("."),
+            until=poll_data["until"],
+            timeout=poll_data["timeout"],
+            max_attempts=poll_data["max_attempts"],
+            started=started,
+            deadline=deadline,
+        )
+        polling_context = StepContext(
+            page=context.page,
+            runtime=context.runtime,
+            output_dir=context.output_dir,
+            screenshots=context.screenshots,
+            scopes=context.scopes,
+            bindings=context.bindings,
+            polls=(*context.polls, progress),
+        )
+
+        def failure(error_class: type[PollError], reason: str) -> PollError:
+            detail = progress.diagnostics()
+            return error_class(
+                f"Poll {reason} at {progress.step_path}, attempt {progress.attempts}, phase {progress.phase}; "
+                f"timeout={progress.timeout:g}ms; until={progress.until!r}; last_results={progress.results!r}",
+                {"polls": [detail]},
+            )
+
+        timer = asyncio.timeout_at(deadline)
+        try:
+            async with timer:
+                while True:
+                    check_poll_deadline(polling_context.polls)
+                    progress.attempts += 1
+                    self._log(f"[{prefix}attempt-{progress.attempts}] Poll attempt {progress.attempts}")
+                    await self._execute_steps(
+                        poll_data["steps"], polling_context, prefix=f"{prefix}attempt-{progress.attempts}."
+                    )
+                    for poll in polling_context.polls:
+                        poll.phase = "until"
+                        poll.step_path = f"{prefix}attempt-{progress.attempts}.until"
+                    if await await_poll_operation(
+                        lambda: evaluate_condition(polling_context, progress.until, "until"), polling_context.polls
+                    ):
+                        return StepResult(
+                            success=True,
+                            message=f"Poll satisfied after {progress.attempts} attempts",
+                            output=snapshot_json(progress.output()),
+                            diagnostics={"polls": [progress.diagnostics()]},
+                        )
+                    if progress.max_attempts is not None and progress.attempts >= progress.max_attempts:
+                        raise failure(PollAttemptsExhausted, f"exhausted max_attempts={progress.max_attempts}")
+                    for poll in polling_context.polls:
+                        poll.phase = "interval"
+                    await asyncio.sleep(poll_data["interval"] / 1000)
+        except PollDeadlineExceeded as error:
+            raise failure(PollTimeoutError, "timed out") from error
+        except asyncio.CancelledError as error:
+            if asyncio.get_running_loop().time() >= deadline:
+                raise failure(PollTimeoutError, "timed out") from error
+            raise
+        except PollError as error:
+            if error.diagnostics["polls"][0]["path"] == progress.path:
+                raise
+            raise type(error)(str(error), {"polls": [progress.diagnostics(), *error.diagnostics["polls"]]}) from error
+        except Exception as error:
+            if timer.expired():
+                raise failure(PollTimeoutError, "timed out") from error
+            raise failure(PollError, f"failed: {error}") from error
 
     def load_flow(self, flow_path: Path) -> dict[str, Any]:
         """Load flow file."""
@@ -567,6 +697,8 @@ class FlowExecutor:
                         "error": str(e),
                         "context": error_context.to_dict(),
                     }
+                    if isinstance(e, PollError):
+                        failed_step["diagnostics"] = e.diagnostics
 
                     click.echo(f"[{step_num}/{total_steps}] {step_type} FAILED: {e}", err=True)
 
@@ -593,15 +725,18 @@ class FlowExecutor:
                             "failed_step": failed_step,
                         }
 
-            click.echo("All steps completed successfully")
+            click.echo(
+                "All steps completed successfully" if failed_step is None else "Execution completed with failures"
+            )
 
             return {
-                "success": True,
+                "success": failed_step is None,
                 "flow": flow_name,
                 "duration_ms": int((time.time() - start_time) * 1000),
                 "screenshots": screenshots,
                 "steps_executed": total_steps,
                 "steps_total": total_steps,
+                **({"failed_step": failed_step} if failed_step is not None else {}),
             }
         finally:
             await context.close()

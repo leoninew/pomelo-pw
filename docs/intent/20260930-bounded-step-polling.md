@@ -1,19 +1,19 @@
 # T05 有界步骤轮询
-最后修改时间: 2026-09-30 12:50:26
+最后修改时间: 2026-10-02 09:51:08
 
 ## Review status
 
-Draft
+Accepted
 
 ## Task metadata
 
-- 流程：标准模式 / standard，意图阶段 / Intent。
+- 流程：标准模式 / standard，Intent/Plan 已接受，Implementation 已交付，Verification 技术检查通过，文档为 Draft 待用户审阅。
 - 优先级：P0；依赖：[T01](20260930-runtime-result-context.md)、[T02](20260930-structured-flow-conditions.md)；工作量：2-3 人日。
 - 系列入口：[P0/P1 流程能力任务系列](20260930-p0-p1-flow-capabilities.md)。
 
 ## Background
 
-业务 flow 通过内层 while、固定 delay、evaluate 和 pending 标记组合任务轮询。循环达到最大次数后当前实现只退出，无法直接表达耗尽失败或统一的总等待时限。
+改造前，业务 flow 通过内层 while、固定 delay、evaluate 和 pending 标记组合任务轮询。循环达到最大次数后只退出，无法直接表达耗尽失败或统一的总等待时限。
 
 ## Goals
 
@@ -58,4 +58,8 @@ Draft
 
 ## User review notes
 
-依据用户对 P0/P1 的任务拆分要求创建，等待意图审阅。
+- 用户要求继续推进任务，接受本项 Intent；沿用“没有未决事项就开始实现”，依据 [实施计划](../plan/20260930-bounded-step-polling.md) 进入 Implementation。
+- 达到可用状态后停止，供用户自行测试。本轮不运行测试，不创建 Verification，不自动推进 T06 或执行 Git 写操作。
+- poll、嵌套预算、成功输出与失败诊断、while 新耗尽语义及 on_error=continue 的失败汇总已实现。7 个变更 Python 文件的格式/lint/类型检查和离线示例静态校验通过，未运行 pytest 或浏览器，交付细节见 Plan。
+- 用户查看实现交付后要求开始验证，授权针对性回归、离线最小集成及发现问题后的修复；不自动推进 T06。
+- 本轮 120 项相关回归、离线 polling 示例、CLI 耗尽/超时退出码、真实异步预算边界和变更文件静态检查通过，没有发现产品代码缺陷。详见 [Verification](../verification/20260930-bounded-step-polling.md)，当前停止待用户审阅。

@@ -68,7 +68,7 @@ Pass data into browser functions through `args`; script source is literal:
 
 `${ }` is reserved for host languages such as JavaScript and is not processed as flow variable syntax.
 
-`save_as` binds successful public JSON output (currently supported by evaluate); read it with `{{results.response}}`. Results are shared by nested steps and isolated between data rows. Child parameters resolve at execution; child local variables do not leak into siblings. Input definitions may reference other inputs; cycles fail. Results stay opaque, even if strings contain template syntax. Rebinding replaces a result; a failed write clears the old binding, while its arguments may read the previous snapshot.
+`save_as` binds successful public JSON output (currently supported by evaluate and poll); read it with `{{results.response}}`. Results are shared by nested steps and isolated between data rows. Child parameters resolve at execution; child local variables do not leak into siblings. Input definitions may reference other inputs; cycles fail. Results stay opaque, even if strings contain template syntax. Rebinding replaces a result; a failed write clears the old binding, while its arguments may read the previous snapshot.
 
 `evaluate.script` must be a synchronous or async function expression and explicitly return JSON data; use `return null` for no data. Omitted args passes no arguments; explicit null passes one null. Unsupported values, nonfinite numbers, and circular data fail. Migrate bare module bodies to functions and source interpolation to args; no compatibility adapters are provided.
 
@@ -104,6 +104,7 @@ Screenshots save to `./<flow-name>/` by default (derived from filename).
 | `load-state` | `file` | Restore saved auth state |
 | `if` | `condition`, `then` | Conditional execution |
 | `loop` | `steps`, `times`/`while` | Loop execution |
+| `poll` | `until`, `steps` | Bounded query rounds with fresh results |
 | `foreach` | `items`, `steps`, optional `as`, `index_as` | Serial array iteration with local bindings |
 
 ## Step Details
@@ -275,9 +276,33 @@ Guard optional data with exists before accessing its fields. Static validation c
 
 Arrays are snapshotted on entry and traversed serially; empty arrays execute no children. Default names are `item`/`index`, with a zero-based index. Aliases must be distinct, non-reserved ASCII identifiers. Bindings override ordinary variables and CLI overrides, stay opaque, and are restored after nested loops. Old foreach times/while calls must use loop; loop requires exactly one mode, integer counts, and max_iterations only with while.
 
+While checks its condition again after the last allowed iteration: false completes, true fails with exhaustion. There is no adapter for the old successful-exhaustion behavior.
+
+### poll - Bounded Queries
+
+```yaml
+- type: poll
+  until: {in: ["{{results.task.status}}", [ready, failed]]}
+  timeout: 30000
+  interval: 1000
+  max_attempts: 20
+  save_as: polling
+  steps:
+    - type: evaluate
+      args: {id: "{{results.submitted.id}}"}
+      script: "async ({id}) => { const r = await fetch('/tasks/' + id); if (!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); }"
+      save_as: task
+      retry: 2
+      retry_delay: 250
+```
+
+The non-empty body runs immediately, then until reads fresh results. False waits interval after the round. Timeout (default 30000ms) includes body, condition, retries and delays; interval defaults to 1000ms. Both are finite positive numbers; optional max_attempts is a positive integer. All bounds support complete typed references. Nested polls cannot extend the parent's deadline. Exhaustion fails; a true condition on the final round succeeds. Keep writes before poll and declare read retries on children; poll rejects parent retry parameters.
+
+Successful output is `{attempts, elapsed_ms, results}` with the body's latest successful bindings. Terminal business failures may satisfy until; handle outcomes in later branches. Failure details live in failed_step.diagnostics.polls, including nested paths and prior successful values even after a failed rebind. At timeout no new operations start and late results are discarded; in-flight browser operations may finish, with late errors consumed. on_error=continue still reports an unsuccessful flow if any step failed.
+
 ### Step-Level Retry
 
-Any step supports retry parameters:
+Operation steps and if/loop/foreach support retry parameters; poll requires retries on its children:
 
 Retries on if/loop/foreach only cover the parent's own probe or setup. A child failure never replays completed branches or iterations; put retries on the individual operation. Nested errors include the step path and array index.
 

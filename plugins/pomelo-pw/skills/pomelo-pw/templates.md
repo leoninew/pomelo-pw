@@ -306,6 +306,26 @@ steps:
 
 Use child retries for individual operations; parent retries do not replay completed iterations.
 
+### Bounded Task Polling
+
+```yaml
+- type: poll
+  until: {in: ["{{results.task.status}}", [ready, failed]]}
+  timeout: 30000
+  interval: 1000
+  max_attempts: 20
+  save_as: polling
+  steps:
+    - type: evaluate
+      args: {id: "{{results.submitted.id}}"}
+      script: "async ({id}) => { const r = await fetch('/tasks/' + id); if (!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); }"
+      save_as: task
+      retry: 2
+      retry_delay: 250
+```
+
+Submit before this step. The first query is immediate; timeout includes child retries and intervals. Both ready and failed end polling, so handle the business result afterward. Exhaustion fails, and save_as records attempts, elapsed_ms and the latest successful body bindings.
+
 ## Data-Driven Testing
 
 ### 11. Multi-User Test
