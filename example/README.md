@@ -35,6 +35,7 @@ pomelo-pw run example/public/data-driven-pages.yaml --var base_url=https://stagi
 | `public/session-http-request.yaml` | Browser Cookie sharing, typed HTTP payloads, query polling and text output | Start the local fixture below |
 | `public/dom-data-extraction.yaml` | DOM snapshots, field mapping, raw/absolute URLs, live values and foreach | Yes, offline |
 | `public/flow-assertions-results.yaml` | Per-item collection, assertions, exports and bounded execution reports | Yes, offline |
+| `public/flow-capability-example.yaml` | Paginated DOM inventory, restored Cookie sessions, serial tasks and business policy | Start the capability fixture below |
 | `public/visual-regression.yaml` | Screenshot baseline comparison | Yes, with Pillow |
 
 ## Runtime Results
@@ -124,6 +125,44 @@ uv run --locked --no-sync pomelo-pw run example/public/flow-assertions-results.y
 stdout contains a single schema_version=1 JSON report, with logs on stderr. To exercise a controlled assertion failure and exit code 1, add `--var expected_first_category=unexpected`; outcomes/summary still export, and errors contain the visited values plus screenshot/HTML evidence. The successful path exits 0. Business outcome categories only affect execution status through explicit assertions.
 
 Optional report.steps records bounded execution detail; include_outputs requires steps and is off by default. Explicit exports are complete. foreach collection limits fail rather than truncating data, with no partial collection binding.
+
+## Integrated Flow Capabilities
+
+Start the dedicated loopback fixture, then run the flow from another terminal:
+
+```bash
+uv run --locked --no-sync python example/support/flow_capability_server.py --port 8767
+```
+
+```bash
+uv run --locked --no-sync pomelo-pw run example/public/flow-capability-example.yaml --headless --json -v
+```
+
+The default mixed scenario collects seven materials across two asynchronously loaded pages. It saves the signed-in Cookie, removes it through the fixture's logout endpoint, observes HTTP 401, and restores it with load-state before requesting data. It then skips missing/unsupported/previously failed files, resumes an existing task, and submits two new tasks serially. Final summary: total=7, ready=3, skipped=3, failed=1, submitted=2, resumed=1. inventory, outcomes, summary and the server's independent audit are explicitly exported.
+
+| Options appended to the run command | Expected execution result |
+| --- | --- |
+| None | Passed, exit 0; business failure appears in the summary |
+| `--var failure_policy=fail` | Assertion failure, exit 1; complete outputs retained |
+| `--var scenario=empty` | Passed, exit 0; empty inventory/outcomes and zero counts |
+| `--var scenario=read-error` | HTTP 503 while querying the first new task, exit 1 |
+| `--var scenario=timeout` | First new task stays pending until poll timeout, exit 1 |
+
+For read-error/timeout, inventory remains available, while the incomplete foreach collection and later summary/audit are not published; unresolved declared outputs add explicit output errors. The first error retains the nested item/operation path, polling diagnostics and screenshot/HTML evidence. Already submitted tasks are not replayed, and the next material is not submitted. Business classifications only become execution failures through the explicit policy assertion.
+
+Each page waits for matching route, page number and ready marker before extract. The few evaluate functions only flatten snapshots, project business outcomes, count categories and render the summary; pagination, branching, submission and polling use public steps. The audit records visited pages and submit/terminal ordering, and rejects duplicate or overlapping submissions. Repeated runs create fresh sessions. This fixture's logout clears the client Cookie without revoking the simulated server session, allowing state restoration to be checked.
+
+If port 8767 is occupied, choose another `--port` and pass the matching `--base-url http://127.0.0.1:PORT`. Stop the fixture with Ctrl+C. JSON stdout can be redirected independently from stderr logs. No external business service or real credentials are used.
+
+The focused regression file runs two fast checks by default. Enable its five real browser CLI scenarios explicitly (PowerShell):
+
+```powershell
+$env:POMELO_PW_INTEGRATION = '1'
+uv run --locked --no-sync pytest tests/test_flow_capability_example.py -q
+Remove-Item Env:POMELO_PW_INTEGRATION
+```
+
+Those checks start and stop their own fixture on a temporary port. A usable system Chrome/Chromium or installed Playwright browser is required; no browser mock replaces the integration checks.
 
 ## Browser Interactions
 

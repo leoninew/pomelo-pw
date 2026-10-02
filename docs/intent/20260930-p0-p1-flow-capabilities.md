@@ -1,5 +1,5 @@
 # P0/P1 流程能力任务系列
-最后修改时间: 2026-10-02 12:13:51
+最后修改时间: 2026-10-02 13:49:45
 
 ## Review status
 
@@ -7,9 +7,9 @@ Accepted
 
 ## Flow mode and stage
 
-标准模式 / standard，系列意图 / Intent 已接受；T01-T05 已交付，T03/T04/T05 分别提交为 a02b2f3、4d98eac、cc6cc24，Verification 已接受。T06 浏览器会话 HTTP 请求 Implementation 已交付并提交为 89eb7ef，未创建正式 Verification。T07 已提交为 ee2b301，Verification 已接受。T08 Intent/Plan 已接受，Implementation 已交付至可用状态，当前停止供用户自行测试；未进入正式 Verification 或 T09。
+标准模式 / standard，系列意图 / Intent 已接受；T01-T05 已交付，T03/T04/T05 分别提交为 a02b2f3、4d98eac、cc6cc24，Verification 已接受。T02 没有独立正式 Verification。T06 浏览器会话 HTTP 请求 Implementation 已交付并提交为 89eb7ef，未创建正式 Verification。T07 已提交为 ee2b301，Verification 已接受。T08 已提交为 83e06a0，尚无正式 Verification。T09 实现与正式 Verification 的技术检查已完成，结论通过，验证文档 Draft 表示用户审阅状态。八项通用能力和一项串联示例均已交付并完成组合验证，但不据此标记全部阶段 Accepted。
 
-本系列按独立任务推进 Intent -> Plan -> Implementation -> Verification。系列拆分、T01 各审查阶段及 T02-T08 Intent/Plan 已接受；T09 仍处于 Intent 草稿。各任务进入下一阶段时，在对应阶段目录使用相同文件名；系列入口的接受不自动表示所有任务的 Plan 或实现已经接受。
+本系列按独立任务推进 Intent -> Plan -> Implementation -> Verification。系列拆分、T01 各审查阶段及 T02-T09 Intent/Plan 已接受。各任务进入下一阶段时，在对应阶段目录使用相同文件名；系列入口的接受不自动表示所有任务的实现或验收已经接受。
 
 ## Background
 
@@ -87,7 +87,7 @@ Pomelo PW 已提供导航、交互、等待、条件、循环和 evaluate，但�
 ## Decisions
 
 - 所有任务采用用户指定的标准模式，不因任务较小改用轻量模式。
-- 只使用 Draft / Accepted 作为阶段审查状态；当前为 T01/T03/T04/T05/T07 Verification Accepted、T02-T08 Intent/Plan Accepted，T09 Intent 为 Draft。
+- 只使用 Draft / Accepted 作为阶段审查状态；当前为 T01/T03/T04/T05/T07 Verification Accepted、T02-T09 Intent/Plan Accepted。
 - 采用现有 Playwright 能力处理浏览器等待、DOM 定位和请求；不自建通用 JS/Python 表达式引擎。
 - 嵌套校验、参数解析时机和重试边界归入相关基础任务，不另立无关的全项目重构任务。
 - 用户明确“不做兼容适配”。各任务以新契约正确性为目标；必要的旧接口移除和仓库内调用迁移纳入对应任务，外部调用方迁移另行处理。
@@ -100,6 +100,12 @@ Pomelo PW 已提供导航、交互、等待、条件、循环和 evaluate，但�
 - 本地示例能验证组合能力，不能证明外部生产页面在数据并发变化或认证过期时的行为。
 
 ## User review notes
+
+- 用户要求将 T09 推进完成，正式验证已完成：两项快速回归、五个真实 CLI 场景、静态检查及产物核对通过，详见 [T09 Verification](../verification/20260930-flow-capability-example.md)。没有产品缺陷或范围扩张，验证命令的目录准备问题已纠正并补跑。剩余逐项正式验收记录为 T02/T06/T08；T09 技术工作完成，文档审阅状态为 Draft。
+
+- T09 独立回环服务、分页/异步任务串联 flow、聚焦回归和使用说明已交付，开发检查 7 项通过，含五个本机真实 CLI 场景；见 [T09 Plan](../plan/20260930-flow-capability-example.md)。T01-T09 均已有实现交付，但正式验收仍有 T02/T06/T08/T09 未完成；不宣称系列验收完成，当前停止供用户自行测试。
+
+- 用户要求提交并查看系列进度，T08 已提交为 83e06a0；随后要求推进下一项。接受 T09 Intent/Plan 并进入 Implementation，不把 T02/T06/T08 的正式验收缺口标记为完成。
 
 - 用户提交 T07 为 ee2b301 后要求推进下一步，接受 T07 Verification；沿用无未决事项时开始实现的授权，接受 T08 Intent/Plan 并完成断言、逐项收集、显式导出和统一报告。250 项相关回归、收尾报告回归 15 项、14 文件静态检查及真实 CLI 成功/断言失败/缺失文件最小集成通过，交付见 [T08 Plan](../plan/20260930-flow-assertions-results.md)。当前停止供用户自行测试，没有正式 Verification、提交或推进 T09。
 

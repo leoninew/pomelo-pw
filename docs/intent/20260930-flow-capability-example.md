@@ -1,13 +1,13 @@
 # T09 P0/P1 串联示例与能力验收
-最后修改时间: 2026-09-30 12:50:26
+最后修改时间: 2026-10-02 13:49:45
 
 ## Review status
 
-Draft
+Accepted
 
 ## Task metadata
 
-- 流程：标准模式 / standard，意图阶段 / Intent。
+- 流程：标准模式 / standard，Intent/Plan 已接受，Implementation 已交付；用户要求推进完成，正式 Verification 的技术检查已完成且结论通过，验证文档 Draft 表示用户审阅状态。
 - 优先级：P1；依赖：T01-T08；工作量：1-2 人日。
 - 系列入口：[P0/P1 流程能力任务系列](20260930-p0-p1-flow-capabilities.md)。
 
@@ -45,7 +45,7 @@ Draft
 
 ## Open questions
 
-需要审阅的假设：本系列交付仓库内受控示例，真实 K12 flow 迁移不在本任务内。暂无必须由用户决定后才能继续的未决事项；测试页面与模拟接口的具体组织在 Plan 中确定。
+本系列交付仓库内受控示例，真实 K12 flow 迁移不在本任务内。采用独立回环 HTTP fixture 与会话隔离的模拟接口；暂无必须由用户决定后才能继续的未决事项，实施范围见 Plan。
 
 ## Decisions
 
@@ -60,4 +60,8 @@ Draft
 
 ## User review notes
 
-依据用户对 P0/P1 的任务拆分要求创建，等待意图审阅。
+- 用户确认本项性质为集成示例与验收后要求“那推进完成吧”，据此接受实现交付并进入 Verification；两项快速回归、五个真实 CLI 场景及静态检查通过，见 [T09 Verification](../verification/20260930-flow-capability-example.md)。本项技术工作已完成，没有执行 Git 写操作。
+- 串联 flow、独立回环 fixture、聚焦回归及 README/Agent 说明已交付；7 项检查包含五个真实 CLI 场景，详见 [T09 Plan](../plan/20260930-flow-capability-example.md) 的 Implementation handoff。没有必须修复的遗留事项，停止供用户自行测试。
+- 用户提交 T08 为 83e06a0 后要求推进下一项，接受本项 Intent；沿用“没有未决事项就开始实现”和“可用后停止自行测试”的授权，接受 Plan 并进入 Implementation。
+- T08 的开发检查已通过且实现已提交，尚未创建正式 Verification；本项不替代 T02/T06/T08 各自的正式验收。
+- 只做本项针对性回归和本机最小集成，不执行全量、真实业务或用户级插件同步。

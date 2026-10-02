@@ -370,6 +370,14 @@ run --json stdout is one schema_version=1 JSON document; all execution logs go t
 
 report defaults to steps=false, max_steps=1000, include_outputs=false, max_value_bytes=16384 and max_errors=100. include_outputs requires steps=true. Retries record one final logical step; control step duration includes children. Trace/error overflow counts dropped details, large values mark omitted/bytes, and messages mark truncation. Explicit exports stay complete. Data-driven rows have independent reports plus label/index, and their own exports; row inputs are not exported automatically. Aggregated trace/errors include row identity and remain bounded. See example/public/flow-assertions-results.yaml.
 
+### Integrated Capability Example
+
+The repository's example/public/flow-capability-example.yaml combines typed references, conditions, foreach collection, page readiness, session HTTP requests, extract, poll, assertions and exports. Start example/support/flow_capability_server.py on loopback port 8767 and run the flow with --headless --json. See example/README.md for the full commands and port overrides.
+
+Default mixed has seven materials over two pages and exports inventory/outcomes/summary/audit, with ready=3/skipped=3/failed=1. failure_policy=fail converts the business failure into an assertion failure after complete exports; default report exits 0. scenario=empty/read-error/timeout exercises empty input, a query HTTP 503, or a pending task exceeding its budget. Infrastructure failures retain inventory and nested error evidence, while unpublished collection/summary exports explicitly fail to resolve.
+
+Wait for the matching page route and ready marker before extract. Place POST submissions outside poll and do not retry them implicitly. Resume existing tasks, collect each completed outcome once, and use the server audit to confirm no duplicate or overlapping submissions. Short evaluate functions transform snapshots and summarize data; they do not replace control steps. The fixture also saves browser state, removes its client Cookie, verifies 401, then restores the saved Cookie before data requests. Each login creates an isolated run; no real credentials or external services are needed.
+
 ### Step-Level Retry
 
 Operation steps and if/loop/foreach support retry parameters; poll requires retries on its children:

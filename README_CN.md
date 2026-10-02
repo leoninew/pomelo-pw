@@ -300,6 +300,8 @@ steps:
 
 可运行[离线断言与报告示例](example/public/flow-assertions-results.yaml)。
 
+完整组合可运行[本机能力串联示例](example/README.md#integrated-flow-capabilities)：采集分页 DOM 数据、恢复浏览器 Cookie 状态、串行处理任务并导出可与服务审计核对的结果。mixed、empty、read-error、timeout 为确定性场景，业务失败是否使流程失败由显式断言政策决定。
+
 ### 编写 Flow
 
 下例展示了常见模式：导航、交互、等待有意义的结果，然后保存证据。

@@ -300,6 +300,8 @@ Detailed trace is opt-in: report defaults to `steps: false`, `max_steps: 1000`, 
 
 Try [the offline assertion/report example](example/public/flow-assertions-results.yaml).
 
+For a combined workflow, [the local capability example](example/README.md#integrated-flow-capabilities) collects paginated DOM data, restores browser Cookie state, processes tasks serially and exports audited outcomes. Its deterministic mixed, empty, read-error and timeout scenarios exercise the current public contracts; an explicit assertion selects whether business failures fail the run.
+
 ### Author Flows
 
 The following flow shows the common pattern: navigate, interact, wait for a meaningful result, then capture evidence.

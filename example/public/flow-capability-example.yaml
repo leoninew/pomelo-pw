@@ -1,0 +1,208 @@
+name: flow-capability-example
+description: Paginated DOM inventory, Cookie-backed serial tasks and explicit business policy.
+headless: false
+output_dir: output/flow-capability-example
+variables:
+  base_url: http://127.0.0.1:8767
+  scenario: mixed
+  failure_policy: report
+  task_timeout: 1500
+  material: outer-material
+  page_number: outer-page
+outputs:
+  inventory: '{{results.inventory.items}}'
+  outcomes: '{{results.processed.items}}'
+  summary: '{{results.summary}}'
+  audit: '{{results.audit.body}}'
+report:
+  steps: true
+  max_steps: 500
+steps:
+  - type: assert
+    condition: {in: ['{{failure_policy}}', [report, fail]]}
+    message: Unknown failure policy
+  - type: navigate
+    url: '{{base_url}}/?scenario={{scenario}}'
+  - type: click
+    selector: '#login'
+  - type: wait
+    condition: {page: {text_contains: Signed in}}
+    timeout: 3000
+  - type: save-state
+    file: session.json
+  - type: request
+    url: /logout
+    method: POST
+  - type: request
+    url: /api/manifest
+    expected_status: 401
+  - type: load-state
+    file: session.json
+  - type: request
+    url: /api/manifest
+    save_as: manifest
+  - type: evaluate
+    args: {material: '{{material}}', page_number: '{{page_number}}'}
+    script: 'bindings => bindings'
+    save_as: outer_bindings
+    print_result: false
+  - type: foreach
+    items: '{{results.manifest.body.pages}}'
+    as: page_number
+    collect: {page: '{{page_number}}', rows: '{{results.page_rows}}'}
+    save_as: pages
+    steps:
+      - type: wait
+        condition:
+          all:
+            - page: {url_contains: '#page-{{page_number}}'}
+            - page: {element_visible: '#catalog[data-page="{{page_number}}"][data-ready="true"]'}
+        timeout: 3000
+        interval: 20
+      - type: extract
+        selector: '#catalog tbody tr'
+        mode: all
+        fields:
+          id: {read: attribute, attribute: data-id}
+          name: {selector: .name}
+          status: {selector: .status}
+          format: {selector: .format}
+          file: {selector: '.file a', read: url, attribute: href, required: false}
+          task_id: {read: attribute, attribute: data-task-id, required: false}
+        save_as: page_rows
+      - type: if
+        condition: {ne: ['{{page_number}}', '{{results.manifest.body.page_count}}']}
+        then:
+          - type: click
+            selector: '#next'
+  - type: evaluate
+    args: '{{results.pages.items}}'
+    script: |
+      pages => {
+        const items = pages.flatMap(page => page.rows);
+        return {items, total: items.length, unique: new Set(items.map(item => item.id)).size};
+      }
+    save_as: inventory
+    print_result: false
+  - type: assert
+    condition:
+      all:
+        - eq: ['{{results.inventory.total}}', '{{results.manifest.body.total}}']
+        - eq: ['{{results.inventory.total}}', '{{results.inventory.unique}}']
+    message: Inventory contains missing or duplicate materials
+  - type: foreach
+    items: '{{results.inventory.items}}'
+    as: material
+    collect: '{{results.outcome}}'
+    save_as: processed
+    steps:
+      - type: if
+        condition: {eq: ['{{material.status}}', ready]}
+        then:
+          - type: evaluate
+            args: '{{material}}'
+            script: 'material => ({id: material.id, category: "ready", reason: "already_ready", submitted: false})'
+            save_as: outcome
+            print_result: false
+        else:
+          - type: if
+            condition:
+              any:
+                - eq: ['{{material.file}}', null]
+                - not: {in: ['{{material.format}}', '{{results.manifest.body.supported_formats}}']}
+                - eq: ['{{material.status}}', failed]
+            then:
+              - type: evaluate
+                args: {material: '{{material}}', formats: '{{results.manifest.body.supported_formats}}'}
+                script: |
+                  ({material, formats}) => ({
+                    id: material.id, category: "skipped", submitted: false,
+                    reason: material.file === null ? "missing_file" :
+                      !formats.includes(material.format) ? "unsupported_format" : "previous_failed"
+                  })
+                save_as: outcome
+                print_result: false
+            else:
+              - type: evaluate
+                args: '{{material.task_id}}'
+                script: 'id => ({id, submitted: false})'
+                save_as: task_ref
+                print_result: false
+              - type: if
+                condition: {eq: ['{{material.task_id}}', null]}
+                then:
+                  - type: request
+                    url: /api/tasks
+                    method: POST
+                    json:
+                      material_id: '{{material.id}}'
+                      options: {priority: 0, enabled: false, meta: null}
+                    expected_status: 201
+                    save_as: submitted
+                  - type: evaluate
+                    args: '{{results.submitted.body.id}}'
+                    script: 'id => ({id, submitted: true})'
+                    save_as: task_ref
+                    print_result: false
+              - type: poll
+                until: {in: ['{{results.task.body.status}}', [ready, failed]]}
+                timeout: '{{task_timeout}}'
+                interval: 50
+                save_as: polling
+                steps:
+                  - type: request
+                    url: '/api/tasks/{{results.task_ref.id}}'
+                    retry: 1
+                    retry_delay: 20
+                    retry_on: [RequestNetworkError, RequestTimeoutError]
+                    save_as: task
+              - type: evaluate
+                args:
+                  material: '{{material}}'
+                  task: '{{results.task.body}}'
+                  reference: '{{results.task_ref}}'
+                  attempts: '{{results.polling.attempts}}'
+                script: |
+                  ({material, task, reference, attempts}) => ({
+                    id: material.id, category: task.status, task_id: task.id, attempts,
+                    submitted: reference.submitted,
+                    reason: task.error ?? (reference.submitted ? "submitted" : "resumed")
+                  })
+                save_as: outcome
+                print_result: false
+  - type: evaluate
+    args: '{{results.processed.items}}'
+    script: |
+      outcomes => {
+        const summary = {
+          total: outcomes.length,
+          ready: outcomes.filter(item => item.category === "ready").length,
+          skipped: outcomes.filter(item => item.category === "skipped").length,
+          failed: outcomes.filter(item => item.category === "failed").length,
+          submitted: outcomes.filter(item => item.submitted).length,
+          resumed: outcomes.filter(item => item.reason === "resumed").length
+        };
+        document.querySelector('#summary').textContent = JSON.stringify(summary, null, 2);
+        return summary;
+      }
+    save_as: summary
+  - type: request
+    url: /api/audit
+    save_as: audit
+  - type: assert
+    condition:
+      all:
+        - eq: ['{{material}}', '{{results.outer_bindings.material}}']
+        - eq: ['{{page_number}}', '{{results.outer_bindings.page_number}}']
+        - eq: ['{{results.summary.total}}', '{{results.manifest.body.total}}']
+        - eq: ['{{results.audit.body.violations}}', []]
+        - eq: ['{{results.audit.body.pages}}', '{{results.manifest.body.pages}}']
+    message: Scope, pagination or serial processing invariant failed
+  - type: if
+    condition: {eq: ['{{failure_policy}}', fail]}
+    then:
+      - type: assert
+        condition: {eq: ['{{results.summary.failed}}', 0]}
+        message: Some material tasks failed
+  - type: screenshot
+    file: results.png
