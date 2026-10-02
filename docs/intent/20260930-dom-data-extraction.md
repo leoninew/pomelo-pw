@@ -1,5 +1,5 @@
 # T07 DOM 集合与字段提取
-最后修改时间: 2026-10-02 11:31:14
+最后修改时间: 2026-10-02 12:13:51
 
 ## Review status
 
@@ -7,7 +7,7 @@ Accepted
 
 ## Task metadata
 
-- 流程：标准模式 / standard，Intent/Plan 已接受，Implementation 已交付并经用户自行试跑通过；Verification 检查完成且技术结论通过，文档 Draft 待用户审阅。
+- 流程：标准模式 / standard，Intent/Plan/Verification 已接受；用户已提交为 ee2b301 并要求推进 T08。
 - 优先级：P1；依赖：[T01](20260930-runtime-result-context.md)；工作量：2-3 人日。
 - 系列入口：[P0/P1 流程能力任务系列](20260930-p0-p1-flow-capabilities.md)。
 
@@ -57,6 +57,8 @@ material-parse-all 使用 querySelectorAll、行内查找和 textContent 组装�
 异步更新可能导致不同字段取自不同时刻的数据。集合提取需要可解释的快照边界，同时保留明确的页面等待契约。
 
 ## User review notes
+
+- 用户提交 T07 为 ee2b301 并要求推进下一步，据此接受 Verification；进入 T08，不继续修改本项产品范围。
 
 - 用户要求提交当前任务并推进下一步，T06 已提交为 89eb7ef。沿用“没有未决事项就开始实现”，接受本项 Intent/Plan，开始实现。
 - 第一版根选择器使用 Playwright Locator，字段为行内 CSS；同步快照读取，不自动等待、不添加转换语言或兼容适配。达到可用状态后停止供用户自行测试。

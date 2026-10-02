@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import math
 import time
 from functools import partial
@@ -26,7 +27,16 @@ from pomelo_pw.polling import (
     await_poll_operation,
     check_poll_deadline,
 )
-from pomelo_pw.runtime import NO_OUTPUT, RuntimeContext, snapshot_json, validate_inputs
+from pomelo_pw.reporting import CollectionLimitError, ExecutionReport, ExecutionStepError, validate_report_options
+from pomelo_pw.runtime import (
+    IDENTIFIER,
+    NO_OUTPUT,
+    JsonValue,
+    RuntimeContext,
+    snapshot_json,
+    validate_inputs,
+    validate_json,
+)
 from pomelo_pw.steps import get_step
 from pomelo_pw.steps.base import BaseStep, StepContext, StepResult
 from pomelo_pw.substitution import UndefinedVariableError, substitute_vars
@@ -147,6 +157,29 @@ class FlowExecutor:
         step_num: str,
         total_steps: int,
     ) -> StepResult:
+        check_poll_deadline(context.polls)
+        started = time.monotonic()
+        report = context.report
+        entry = report.start_step(step_num, step.get("type", "unknown")) if report else None
+        try:
+            result = await self._execute_step_body(step, context, step_num, total_steps)
+        except BaseException:
+            if report:
+                report.finish_step(entry, "failed", int((time.monotonic() - started) * 1000))
+            raise
+        if report:
+            report.finish_step(
+                entry, "passed" if result.success else "failed", int((time.monotonic() - started) * 1000), result.output
+            )
+        return result
+
+    async def _execute_step_body(
+        self,
+        step: dict[str, Any],
+        context: StepContext,
+        step_num: str,
+        total_steps: int,
+    ) -> StepResult:
         """Prepare one lexical scope, execute, and publish only successful output."""
         check_poll_deadline(context.polls)
         for poll in context.polls:
@@ -171,6 +204,7 @@ class FlowExecutor:
             scopes=(*context.scopes, step.get("variables", {})),
             bindings=context.bindings,
             polls=context.polls,
+            report=context.report,
         )
         raw_fields = {
             "type",
@@ -198,7 +232,7 @@ class FlowExecutor:
             elif result.control.get("type") in ("times", "while"):
                 await self._execute_loop(result.control, step_context, prefix=f"{step_num}.")
             elif result.control.get("type") == "foreach":
-                await self._execute_foreach(result.control, step_context, prefix=f"{step_num}.")
+                result = await self._execute_foreach(result.control, step_context, prefix=f"{step_num}.")
             elif result.control.get("type") == "poll":
                 result = await self._execute_poll(result.control, step_context, prefix=f"{step_num}.")
             check_poll_deadline(context.polls)
@@ -235,7 +269,7 @@ class FlowExecutor:
                 if prefix:
                     if isinstance(error, PollError):
                         raise type(error)(f"Step {step_num} ({step_type}): {error}", error.diagnostics) from error
-                    raise RuntimeError(f"Step {step_num} ({step_type}): {error}") from error
+                    raise ExecutionStepError(f"Step {step_num} ({step_type}): {error}", step_num, step_type) from error
                 raise
 
             self._log(f"[{step_num}] {result.message} end")
@@ -245,10 +279,16 @@ class FlowExecutor:
         loop_data: dict[str, Any],
         context: StepContext,
         prefix: str = "",
-    ) -> None:
+    ) -> StepResult:
         """Run a stable collection snapshot with isolated, opaque bindings."""
+        collected: list[JsonValue] = []
+        collection_bytes = 2  # Include the array brackets and separators in the JSON size.
         for index, item in enumerate(loop_data["items"]):
             check_poll_deadline(context.polls)
+            if "collect" in loop_data and index >= loop_data["max_collect_items"]:
+                raise CollectionLimitError(
+                    f"Foreach collection exceeded max_collect_items={loop_data['max_collect_items']}"
+                )
             self._log(f"[{prefix}index-{index}] Foreach index {index}")
             iteration_context = StepContext(
                 page=context.page,
@@ -262,8 +302,36 @@ class FlowExecutor:
                     loop_data["index_as"]: index,
                 },
                 polls=context.polls,
+                report=context.report,
             )
             await self._execute_steps(loop_data["steps"], iteration_context, prefix=f"{prefix}index-{index}.")
+            check_poll_deadline(context.polls)
+            if "collect" in loop_data:
+                value = snapshot_json(
+                    substitute_vars(
+                        {"value": loop_data["collect"]},
+                        iteration_context.inputs,
+                        context.runtime.snapshot_results(),
+                        iteration_context.bindings,
+                    )["value"]
+                )
+                collection_bytes += len(json.dumps(value, ensure_ascii=False, allow_nan=False).encode("utf-8"))
+                collection_bytes += 2 if collected else 0
+                if collection_bytes > loop_data["max_collect_bytes"]:
+                    raise CollectionLimitError(
+                        f"Foreach collection exceeded max_collect_bytes={loop_data['max_collect_bytes']}; "
+                        f"observed_bytes={collection_bytes}"
+                    )
+                collected.append(value)
+        if "collect" in loop_data and collection_bytes > loop_data["max_collect_bytes"]:
+            raise CollectionLimitError(
+                f"Foreach collection exceeded max_collect_bytes={loop_data['max_collect_bytes']}"
+            )
+        return StepResult(
+            success=True,
+            message=f"Foreach completed: {len(loop_data['items'])} iterations",
+            output={"iterations": len(loop_data["items"]), "items": collected},
+        )
 
     async def _execute_loop(
         self,
@@ -337,6 +405,7 @@ class FlowExecutor:
             scopes=context.scopes,
             bindings=context.bindings,
             polls=(*context.polls, progress),
+            report=context.report,
         )
 
         def failure(error_class: type[PollError], reason: str) -> PollError:
@@ -427,6 +496,19 @@ class FlowExecutor:
         if "headless" in flow and not isinstance(flow["headless"], bool):
             errors.append("Flow field 'headless' must be a boolean")
 
+        outputs = flow.get("outputs", {})
+        if not isinstance(outputs, dict):
+            errors.append("Flow field 'outputs' must be an object")
+        else:
+            for name, value in outputs.items():
+                if not isinstance(name, str) or not IDENTIFIER.fullmatch(name):
+                    errors.append("outputs keys must be ASCII identifiers")
+                try:
+                    validate_json(value, f"outputs.{name}")
+                except ValueError as error:
+                    errors.append(str(error))
+        errors.extend(validate_report_options(flow.get("report", {})))
+
         errors.extend(self._validate_steps(flow.get("steps", []), "steps"))
         return errors
 
@@ -489,6 +571,22 @@ class FlowExecutor:
         return flow_headless if isinstance(flow_headless, bool) else False
 
     async def run_flow(
+        self,
+        flow_path: Path,
+        variables: dict[str, Any] | None = None,
+        output_dir: Path | None = None,
+        headless: bool | None = None,
+    ) -> dict[str, Any]:
+        """Return the same report contract for execution and startup failures."""
+        started = time.monotonic()
+        try:
+            return await self._run_flow(flow_path, variables, output_dir, headless)
+        except Exception as error:
+            report = ExecutionReport()
+            report.add_error(error, "flow", "flow", kind="startup")
+            return report.result(flow_path.stem, int((time.monotonic() - started) * 1000))
+
+    async def _run_flow(
         self,
         flow_path: Path,
         variables: dict[str, Any] | None = None,
@@ -576,6 +674,7 @@ class FlowExecutor:
 
         row_results: list[dict[str, Any]] = []
         all_screenshots: list[str] = []
+        report = ExecutionReport(flow.get("report", {}))
 
         pw_config = self.config.playwright
         if pw_config.executable_path:
@@ -605,34 +704,40 @@ class FlowExecutor:
                         start_time=row_start,
                     )
 
-                    result["row"] = row_label
-                    result["row_data"] = row
+                    result["label"] = row_label
+                    result["index"] = row_idx
                     row_results.append(result)
-                    all_screenshots.extend(result.get("screenshots", []))
+                    all_screenshots.extend(result["artifacts"]["screenshots"])
+                    report.merge_row(result, row_idx, row_label)
 
-                    if not result["success"] and on_error == "stop":
+                    if result["status"] == "failed" and on_error == "stop":
                         click.echo(f"Stopping data-driven run at row {row_num} due to error")
                         break
             finally:
                 await browser.close()
 
         total_ms = int((time.time() - start_time) * 1000)
-        passed = sum(1 for r in row_results if r["success"])
+        passed = sum(1 for r in row_results if r["status"] == "passed")
         failed = len(row_results) - passed
 
         click.echo(f"\nData-driven complete: {passed} passed, {failed} failed ({total_ms} ms)")
 
-        return {
-            "success": failed == 0,
-            "flow": flow_name,
-            "duration_ms": total_ms,
-            "screenshots": all_screenshots,
-            "data_driven": True,
-            "rows_total": len(data_rows),
-            "rows_passed": passed,
-            "rows_failed": failed,
-            "row_results": row_results,
+        result = report.result(
+            flow_name,
+            total_ms,
+            screenshots=all_screenshots,
+            total=len(steps) * len(data_rows),
+            executed=sum(row["steps"]["executed"] for row in row_results),
+            completed=sum(row["steps"]["completed"] for row in row_results),
+        )
+        result["rows"] = row_results
+        result["row_summary"] = {
+            "total": len(data_rows),
+            "executed": len(row_results),
+            "passed": passed,
+            "failed": failed,
         }
+        return result
 
     async def _launch_browser(self, p: Any, headless: bool) -> Any:
         """Launch browser with configured options."""
@@ -654,9 +759,13 @@ class FlowExecutor:
         total_steps = len(steps)
         step_width = len(str(total_steps))
         runtime = RuntimeContext(flow.get("variables", {}), overrides, row_inputs or {})
+        report = ExecutionReport(flow.get("report", {}))
+        screenshots: list[str] = []
+        executed = completed = 0
+        context = None
 
-        context = await self.browser_lifecycle.new_context(browser)
         try:
+            context = await self.browser_lifecycle.new_context(browser)
             page = await context.new_page()
 
             error_collector = ErrorContextCollector()
@@ -664,79 +773,75 @@ class FlowExecutor:
 
             click.echo("Browser ready, starting execution...")
 
-            screenshots: list[str] = []
-            failed_step: dict[str, Any] | None = None
-            step_context = StepContext(page=page, runtime=runtime, output_dir=output, screenshots=screenshots)
+            step_context = StepContext(
+                page=page, runtime=runtime, output_dir=output, screenshots=screenshots, report=report
+            )
 
             for idx, step in enumerate(steps):
                 step_type = step.get("type", "unknown")
                 step_start = time.time()
                 step_num = str(idx + 1).zfill(step_width)
                 self._log(f"[{step_num}/{total_steps}] {step_type} begin")
+                executed += 1
 
                 try:
                     result = await self._execute_step(step, step_context, step_num, total_steps)
 
                     if not result.success:
                         raise RuntimeError(result.message)
+                    completed += 1
 
                     elapsed_ms = int((time.time() - step_start) * 1000)
                     self._log(f"[{step_num}/{total_steps}] {result.message} end, cost {elapsed_ms} ms")
 
                 except Exception as e:
-                    error_context = await error_collector.collect_error_context(
-                        page=page,
-                        output_dir=output,
-                        step_index=idx,
-                        step_type=step_type,
-                    )
-
-                    failed_step = {
-                        "index": idx,
-                        "type": step_type,
-                        "error": str(e),
-                        "context": error_context.to_dict(),
-                    }
-                    if isinstance(e, PollError):
-                        failed_step["diagnostics"] = e.diagnostics
-
                     click.echo(f"[{step_num}/{total_steps}] {step_type} FAILED: {e}", err=True)
-
-                    if error_context.screenshot_path:
-                        click.echo(f"  Screenshot saved: {error_context.screenshot_path}", err=True)
-                    if error_context.html_snapshot_path:
-                        click.echo(f"  HTML snapshot saved: {error_context.html_snapshot_path}", err=True)
-                    if error_context.console_errors:
-                        click.echo(f"  Console errors: {len(error_context.console_errors)}", err=True)
-                    if error_context.network_errors:
-                        click.echo(f"  Network errors: {len(error_context.network_errors)}", err=True)
-                    click.echo(f"  Current URL: {error_context.url}", err=True)
-
-                    on_error = flow.get("on_error", "stop")
-                    if on_error == "stop":
+                    evidence: dict[str, Any]
+                    try:
+                        error_context = await error_collector.collect_error_context(
+                            page=page,
+                            output_dir=output,
+                            step_index=idx,
+                            step_type=step_type,
+                        )
+                        evidence = error_context.to_dict()
+                        if error_context.screenshot_path:
+                            screenshots.append(error_context.screenshot_path)
+                            click.echo(f"  Screenshot saved: {error_context.screenshot_path}", err=True)
+                        if error_context.html_snapshot_path:
+                            click.echo(f"  HTML snapshot saved: {error_context.html_snapshot_path}", err=True)
+                    except Exception as collection_error:
+                        evidence = {"collection_error": str(collection_error)}
+                    report.add_error(e, step_num, step_type, evidence=evidence)
+                    if flow.get("on_error", "stop") == "stop":
                         click.echo("Stopping execution due to error")
-                        return {
-                            "success": False,
-                            "flow": flow_name,
-                            "duration_ms": int((time.time() - start_time) * 1000),
-                            "screenshots": screenshots,
-                            "steps_executed": idx,
-                            "steps_total": total_steps,
-                            "failed_step": failed_step,
-                        }
-
-            click.echo(
-                "All steps completed successfully" if failed_step is None else "Execution completed with failures"
-            )
-
-            return {
-                "success": failed_step is None,
-                "flow": flow_name,
-                "duration_ms": int((time.time() - start_time) * 1000),
-                "screenshots": screenshots,
-                "steps_executed": total_steps,
-                "steps_total": total_steps,
-                **({"failed_step": failed_step} if failed_step is not None else {}),
-            }
+                        break
+        except Exception as error:
+            report.add_error(error, "flow", "flow", kind="startup")
         finally:
-            await context.close()
+            if context is not None:
+                try:
+                    await context.close()
+                except Exception as error:
+                    report.add_error(error, "flow", "flow", kind="cleanup")
+
+        outputs: dict[str, JsonValue] = {}
+        inputs = runtime.effective_inputs()
+        results = runtime.snapshot_results()
+        for name, value in flow.get("outputs", {}).items():
+            try:
+                outputs[name] = snapshot_json(substitute_vars({"value": value}, inputs, results)["value"])
+            except Exception as error:
+                report.add_error(error, f"outputs.{name}", "output", kind="output")
+        click.echo(
+            "All steps completed successfully" if not report.error_count else "Execution completed with failures"
+        )
+        return report.result(
+            flow_name,
+            int((time.time() - start_time) * 1000),
+            outputs=outputs,
+            screenshots=screenshots,
+            total=total_steps,
+            executed=executed,
+            completed=completed,
+        )

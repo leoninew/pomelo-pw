@@ -1,13 +1,13 @@
 # T08 断言与结构化执行结果
-最后修改时间: 2026-09-30 12:50:26
+最后修改时间: 2026-10-02 12:13:51
 
 ## Review status
 
-Draft
+Accepted
 
 ## Task metadata
 
-- 流程：标准模式 / standard，意图阶段 / Intent。
+- 流程：标准模式 / standard，Intent/Plan 已接受，Implementation 已交付至可用状态；停止供用户自行测试，未进入正式 Verification。
 - 优先级：P1；依赖：[T01](20260930-runtime-result-context.md)、[T02](20260930-structured-flow-conditions.md)、[T03](20260930-collection-iteration.md)、[T05](20260930-bounded-step-polling.md)；工作量：2-3 人日。
 - 系列入口：[P0/P1 流程能力任务系列](20260930-p0-p1-flow-capabilities.md)。
 
@@ -59,4 +59,7 @@ evaluate 的结果主要显示在步骤消息中，执行器的最终返回未�
 
 ## User review notes
 
-依据用户对 P0/P1 的任务拆分要求创建，等待意图审阅。
+- 已实现 assert、foreach.collect、显式 exports、统一有界报告及纯 stdout JSON；相关回归、静态检查和离线 CLI 最小集成通过，详见 [T08 Plan](../plan/20260930-flow-assertions-results.md) 的 Implementation handoff。未执行全量测试、提交或推进 T09。
+
+- 用户要求推进下一步，接受 T07 Verification，沿用“没有未决事项就开始实现”的授权，接受本项 Intent/Plan 并开始实现。
+- 采用唯一新输出结构，断言复用现有条件，结果显式导出和逐项收集；详细轨迹默认关闭并有上限。完成到可用状态后停止供用户自行测试，不自动进入 Verification 或 T09。

@@ -134,17 +134,28 @@ def _json_equal(left: JsonValue, right: JsonValue) -> bool:
 
 
 class _ConditionEvaluator:
-    def __init__(self, context: StepContext) -> None:
+    def __init__(self, context: StepContext, observations: list[dict[str, Any]] | None = None) -> None:
         self.page = context.page
         self.inputs = context.inputs
         self.results = context.runtime.snapshot_results()
         self.bindings = deepcopy(context.bindings)
+        self.observations = observations
 
-    def _resolve(self, value: Any) -> JsonValue:
-        return snapshot_json(substitute_vars({"value": value}, self.inputs, self.results, self.bindings)["value"])
+    def _resolve(self, value: Any, path: str = "value") -> JsonValue:
+        try:
+            resolved = snapshot_json(
+                substitute_vars({"value": value}, self.inputs, self.results, self.bindings)["value"]
+            )
+        except UndefinedVariableError:
+            if self.observations is not None:
+                self.observations.append({"path": path, "expression": snapshot_json(value), "missing": True})
+            raise
+        if self.observations is not None:
+            self.observations.append({"path": path, "expression": snapshot_json(value), "value": resolved})
+        return resolved
 
-    def _page_parameter(self, value: Any, operator: str) -> str:
-        parameter = self._resolve(value)
+    def _page_parameter(self, value: Any, operator: str, path: str | None = None) -> str:
+        parameter = self._resolve(value, path or operator)
         if not isinstance(parameter, str) or not parameter.strip():
             raise ValueError(f"{operator} must resolve to a non-empty string")
         return parameter
@@ -169,7 +180,10 @@ class _ConditionEvaluator:
         operator, value = next(iter(condition.items()))
         location = f"{path}.{operator}"
         try:
-            return await self._evaluate(operator, value, location)
+            result = await self._evaluate(operator, value, location)
+            if self.observations is not None:
+                self.observations.append({"path": location, "result": result})
+            return result
         except ConditionEvaluationError:
             raise
         except Exception as error:
@@ -188,12 +202,12 @@ class _ConditionEvaluator:
             return not await self.evaluate(value, path)
         if operator == "exists":
             try:
-                self._resolve(value)
+                self._resolve(value, path)
             except UndefinedVariableError:
                 return False
             return True
         if operator in ("eq", "ne", "in"):
-            left, right = self._resolve(value[0]), self._resolve(value[1])
+            left, right = self._resolve(value[0], f"{path}[0]"), self._resolve(value[1], f"{path}[1]")
             if operator == "in":
                 if not isinstance(right, list):
                     raise ValueError("collection must resolve to an array")
@@ -202,10 +216,14 @@ class _ConditionEvaluator:
             return equal if operator == "eq" else not equal
         if operator == "page":
             page_operator, parameter = next(iter(value.items()))
-            parameter = self._page_parameter(parameter, page_operator)
+            parameter = self._page_parameter(parameter, page_operator, f"{path}.{page_operator}")
             if page_operator == "url_contains":
+                if self.observations is not None:
+                    self.observations.append({"path": f"{path}.url", "value": self.page.url})
                 return parameter in self.page.url
             if page_operator == "url_matches":
+                if self.observations is not None:
+                    self.observations.append({"path": f"{path}.url", "value": self.page.url})
                 return re.search(parameter, self.page.url) is not None
             if page_operator == "text_contains":
                 return await self.page.get_by_text(parameter, exact=False).count() > 0
@@ -214,19 +232,21 @@ class _ConditionEvaluator:
                 return await locator.count() > 0
             visible = await locator.first.is_visible()
             return visible if page_operator == "element_visible" else not visible
-        args = self._resolve(value["args"]) if "args" in value else NO_OUTPUT
+        args = self._resolve(value["args"], f"{path}.args") if "args" in value else NO_OUTPUT
         predicate_result = await call_browser_function(self.page, value["script"], args)
         if not isinstance(predicate_result, bool):
             raise ValueError("JS predicate must return a boolean")
         return predicate_result
 
 
-async def evaluate_condition(context: StepContext, condition: Any, path: str = "condition") -> bool:
+async def evaluate_condition(
+    context: StepContext, condition: Any, path: str = "condition", *, observations: list[dict[str, Any]] | None = None
+) -> bool:
     """Evaluate visited nodes against one input/result snapshot and live page state."""
     errors = validate_condition(condition, path)
     if errors:
         raise ConditionEvaluationError("; ".join(errors))
-    return await _ConditionEvaluator(context).evaluate(condition, path)
+    return await _ConditionEvaluator(context, observations).evaluate(condition, path)
 
 
 def _navigation_destroyed_context(error: BaseException) -> bool:

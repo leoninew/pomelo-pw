@@ -7,6 +7,7 @@ import contextlib
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,7 @@ from playwright._impl._driver import compute_driver_executable, get_driver_env
 
 from pomelo_pw import __version__
 from pomelo_pw.executor import FlowExecutor
+from pomelo_pw.reporting import ExecutionReport
 from pomelo_pw.steps import get_step, list_steps
 
 
@@ -25,7 +27,7 @@ def cli() -> None:
 
 
 @cli.command(context_settings={"help_option_names": ["-h", "--help"]})
-@click.argument("flow", type=click.Path(exists=True))
+@click.argument("flow", type=click.Path())
 @click.option("--base-url", help="Override base URL variable")
 @click.option(
     "--output",
@@ -61,40 +63,36 @@ def run(
 
     output_dir = Path(output) if output is not None else None
 
-    executor = FlowExecutor(work_dir=work_dir, verbose=verbose)
-
+    started = time.monotonic()
     try:
-        result = asyncio.run(
-            executor.run_flow(
-                flow_path,
-                variables=variables,
-                output_dir=output_dir,
-                headless=headless,
-            ),
-        )
+        with contextlib.redirect_stdout(sys.stderr) if json_output else contextlib.nullcontext():
+            executor = FlowExecutor(work_dir=work_dir, verbose=verbose)
+            result = asyncio.run(
+                executor.run_flow(flow_path, variables=variables, output_dir=output_dir, headless=headless),
+            )
     except Exception as e:
-        result = {"success": False, "error": str(e)}
+        report = ExecutionReport()
+        report.add_error(e, "flow", "flow", kind="startup")
+        result = report.result(flow_path.stem, int((time.monotonic() - started) * 1000))
 
     if json_output:
         click.echo(json.dumps(result, indent=2, ensure_ascii=False))
     else:
-        if result.get("success"):
-            if result.get("data_driven"):
-                completed = f"{result['rows_passed']}/{result['rows_total']} rows"
+        if result["status"] == "passed":
+            if result["row_summary"] is not None:
+                completed = f"{result['row_summary']['passed']}/{result['row_summary']['total']} rows"
             else:
-                completed = f"{result['steps_executed']} steps"
-            msg = f"Completed: {completed}, {len(result['screenshots'])} screenshots"
+                completed = f"{result['steps']['completed']} steps"
+            msg = f"Completed: {completed}, {len(result['artifacts']['screenshots'])} screenshots"
             click.echo(msg)
         else:
-            error = result.get("error") or result.get("failed_step", {}).get("error")
-            if not error and result.get("data_driven"):
-                failed_row: dict[str, Any] = next((row for row in result["row_results"] if not row["success"]), {})
-                row_error = failed_row.get("error") or failed_row.get("failed_step", {}).get("error")
-                if row_error:
-                    error = f"Row {failed_row['row']}: {row_error}"
-            click.echo(f"Failed: {error or 'Unknown error'}", err=True)
+            error = result["errors"][0] if result["errors"] else {}
+            reason = error.get("message", "Unknown error")
+            if "row" in error:
+                reason = f"Row {error['row']['label']}: {reason}"
+            click.echo(f"Failed: {reason}", err=True)
 
-    if not result.get("success"):
+    if result["status"] == "failed":
         sys.exit(1)
 
 

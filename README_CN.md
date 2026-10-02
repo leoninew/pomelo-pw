@@ -130,7 +130,7 @@ steps:
 
 `evaluate.script` 必须是同步或 async 函数表达式，源码保持原文。通过 `args` 传递单个 JSON 载荷；未提供 args 时不传参数，`args: null` 则传入一个 null 参数。函数必须明确返回 JSON 值，不需要数据时可 `return null`；不支持的类型、非有限数字和循环数据会报错。
 
-只有产生公开输出的步骤支持 `save_as`，当前为 `evaluate`、`extract`、`request` 和 `poll`。成功后保存结果快照，再次成功写入会覆盖。替换时参数可以读取上一次值，但失败会使该绑定失效。嵌套步骤共享结果，data 行之间隔离。子步骤执行时才解析参数，子步骤局部变量不会泄漏给兄弟步骤。结果字符串始终作为数据，不重新解释为模板。`output_dir` 在运行前解析，只能读取输入。
+只有产生公开输出的步骤支持 `save_as`，当前为 `evaluate`、`extract`、`request`、`poll` 和 `foreach`。成功后保存结果快照，再次成功写入会覆盖。替换时参数可以读取上一次值，但失败会使该绑定失效。嵌套步骤共享结果，data 行之间隔离。子步骤执行时才解析参数，子步骤局部变量不会泄漏给兄弟步骤。结果字符串始终作为数据，不重新解释为模板。`output_dir` 在运行前解析，只能读取输入。
 
 这是不提供兼容适配的接口变更：裸模块代码改为函数，源码中的输入插值改为 `args`；完整引用不再强制转成字符串。Python 步骤实现改用 `StepContext.runtime`/`inputs` 和 `StepResult.output`、`control`、`diagnostics`，移除原 `variables` 和 `StepResult.data`。可直接运行[离线示例](example/public/runtime-results.yaml)。
 
@@ -195,7 +195,7 @@ steps:
 
 `poll` 立即执行非空轮询体，再使用本轮新结果判断 until；false 时从本轮完成起等待 interval，然后再查询。timeout 默认 30000ms，interval 默认 1000ms，均为正且有限的数字；可选 max_attempts 为正整数，均支持完整类型化引用。总时限覆盖步骤、条件、子步骤重试和等待，嵌套轮询不能延长外层预算。耗尽明确失败，最后一轮恰好满足时正常成功。
 
-读取重试在对应子步骤声明，poll 拒绝自身 retry 参数。业务失败终态可以满足 until，之后通过分支判断业务结果。可选 save_as 保存 `{attempts, elapsed_ms, results}`，results 为轮询体最近成功发布的绑定。失败时将最近结果、条件、时限、阶段及嵌套路径保留在 `failed_step.diagnostics.polls`。`on_error: continue` 继续后续步骤，但最终仍报告流程失败。
+读取重试在对应子步骤声明，poll 拒绝自身 retry 参数。业务失败终态可以满足 until，之后通过分支判断业务结果。可选 save_as 保存 `{attempts, elapsed_ms, results}`，results 为轮询体最近成功发布的绑定。失败时将最近结果、条件、时限、阶段及嵌套路径保留在 `errors[].diagnostics.polls`。`on_error: continue` 继续后续步骤，但最终仍报告流程失败。
 
 提交操作放在轮询之前。超时后不启动新步骤或重试，不发布迟到结果；已经发出的浏览器操作可能继续完成，迟到异常会被消费，轮询不撤回副作用。可自行运行[离线轮询示例](example/public/bounded-step-polling.yaml)。
 
@@ -265,6 +265,41 @@ steps:
 
 `loop` 必须且只能提供 `times`（非负整数）或 `while`；`max_iterations` 为正整数，仅允许与 while 使用。次数和上限支持完整类型化引用。最后一轮结束后重新判断 while：false 正常完成，仍为 true 则耗尽失败，不适配原成功退出语义。原 foreach 次数/条件调用必须改用 loop。父 if/loop/foreach 的 retry 仅覆盖自身判断或准备，子步骤失败不会重放已经完成的控制体；需要重试的操作应在对应子步骤声明。嵌套错误包含步骤路径和集合索引。
 
+### 断言与执行报告
+
+```yaml
+outputs:
+  outcomes: '{{results.collected.items}}'
+report:
+  steps: true
+steps:
+  - type: foreach
+    items: '{{records}}'
+    as: record
+    collect: '{{results.outcome}}'
+    save_as: collected
+    steps:
+      - type: evaluate
+        args: '{{record}}'
+        script: 'record => ({id: record.id, category: "processed"})'
+        save_as: outcome
+  - type: assert
+    condition: {eq: ['{{results.collected.items[0].category}}', processed]}
+    message: Unexpected processing result
+```
+
+`assert` 复用统一条件树与短路语义。false 抛出 AssertionFailed，保留条件、访问过的操作数和探测结果；求值错误仍是执行错误。没有隐式等待或重试。message 为非空字符串，默认为 Assertion failed。
+
+`foreach.collect` 在每项完整成功后解析一次，读取该项绑定和当前结果，输出 `{iterations, items}`；没有 collect 时 items 为空。默认 max_collect_items=1000、max_collect_bytes=1048576（JSON UTF-8 字节，含数组括号和分隔符），均支持正整数完整引用且仅与 collect 同用。超限明确失败，不重放控制体，不发布部分集合。
+
+顶层 `outputs` 从结束时的固定运行时快照显式导出命名 JSON 值，键为 ASCII 标识符。缺失或非法引用追加 output 错误，其他字段继续导出。输出中的 failed 等业务分类不影响执行状态，应通过 assert 声明失败政策。
+
+`run --json` 的 stdout 只有一个 JSON 文档，执行日志写入 stderr；成功退出 0，失败退出 1。API/CLI 统一结构为 schema_version=1、status=passed/failed、flow、duration_ms、outputs、steps={total,executed,completed}、trace={enabled,entries,dropped}、errors、errors_dropped、artifacts={screenshots}、rows、row_summary。steps 统计顶层调度次数与成功完成数；错误包含 path/type/kind/error_type/message/diagnostics/evidence，continue 保留多次失败。嵌套路径沿用 index-N/iter-N/attempt-N。旧 success/failed_step 等字段移除，不提供适配。`validate --json` 保留独立 valid/errors 契约。
+
+详细轨迹默认关闭：report 缺省 steps=false、max_steps=1000、include_outputs=false、max_value_bytes=16384、max_errors=100。include_outputs 需要开启 steps。重试只记录逻辑步骤最终状态，控制步骤耗时覆盖子步骤执行。超出轨迹或错误数量统计 dropped；大值标记 `{omitted: true, bytes: ...}`，消息截断有明确标记，显式业务导出不静默截断。每个 data 行带独立报告及 label/index，各自导出 outputs，不自动公开行输入；顶层 row_summary 汇总 total/executed/passed/failed，合并后的错误和轨迹也有上限，并包含行定位。
+
+可运行[离线断言与报告示例](example/public/flow-assertions-results.yaml)。
+
 ### 编写 Flow
 
 下例展示了常见模式：导航、交互、等待有意义的结果，然后保存证据。
@@ -305,6 +340,7 @@ steps:
 | `save-state`、`load-state` | `file` | 复用已认证的浏览器状态 |
 | `if`、`loop` | 条件或迭代配置 | 表达分支和重复操作 |
 | `poll` | `until`、`steps` | 在统一时限内刷新数据并检查终态 |
+| `assert` | `condition`，可选 `message` | 检查明确的预期并报告观察值 |
 | `foreach` | `items`、`steps`，可选 `as` / `index_as` | 遍历数组，提供局部元素和索引绑定 |
 | `evaluate` | `script`，可选 `args` 和 `save_as` | 执行页面函数并传递 JSON 数据 |
 | `request` | `url`，可选 method/query/headers/json/response | 共享浏览器 Cookie 并绑定 HTTP 响应 |

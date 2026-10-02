@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from pomelo_pw.executor import FlowExecutor
+from pomelo_pw.reporting import ExecutionReport
 from pomelo_pw.runtime import RuntimeContext
 from pomelo_pw.steps.base import StepContext, StepResult
 from pomelo_pw.steps.evaluate import EvaluateStep
@@ -33,28 +34,14 @@ def _make_browser() -> MagicMock:
     return browser
 
 
-def _ok_result(**extra: Any) -> dict[str, Any]:
-    return {
-        "success": True,
-        "flow": "test",
-        "duration_ms": 10,
-        "screenshots": [],
-        "steps_executed": 1,
-        "steps_total": 1,
-        **extra,
-    }
+def _ok_result(screenshots: list[str] | None = None) -> dict[str, Any]:
+    return ExecutionReport().result("test", 10, screenshots=screenshots, total=1, executed=1, completed=1)
 
 
-def _fail_result(**extra: Any) -> dict[str, Any]:
-    return {
-        "success": False,
-        "flow": "test",
-        "duration_ms": 10,
-        "screenshots": [],
-        "steps_executed": 0,
-        "steps_total": 1,
-        **extra,
-    }
+def _fail_result() -> dict[str, Any]:
+    report = ExecutionReport()
+    report.add_error(RuntimeError("Row failed"), "1", "evaluate")
+    return report.result("test", 10, total=1, executed=1)
 
 
 class TestDataDrivenExpansion:
@@ -218,13 +205,10 @@ class TestDataDrivenExpansion:
                 start_time=time.time(),
             )
 
-        assert result["success"] is True
-        assert result["data_driven"] is True
-        assert result["rows_total"] == 3
-        assert result["rows_passed"] == 3
-        assert result["rows_failed"] == 0
-        assert len(result["row_results"]) == 3
-        assert len(result["screenshots"]) == 3
+        assert result["status"] == "passed"
+        assert result["row_summary"] == {"total": 3, "executed": 3, "passed": 3, "failed": 0}
+        assert len(result["rows"]) == 3
+        assert len(result["artifacts"]["screenshots"]) == 3
 
     @pytest.mark.asyncio
     async def test_stops_on_first_failure_when_on_error_stop(self, tmp_path: Path) -> None:
@@ -263,8 +247,9 @@ class TestDataDrivenExpansion:
             )
 
         assert call_count == 2  # stopped after row 2 failed
-        assert result["success"] is False
-        assert result["rows_failed"] == 1
+        assert result["status"] == "failed"
+        assert result["row_summary"] == {"total": 3, "executed": 2, "passed": 1, "failed": 1}
+        assert result["errors"][0]["row"] == {"index": 1, "label": "row-2"}
 
     @pytest.mark.asyncio
     async def test_continues_on_failure_when_on_error_continue(self, tmp_path: Path) -> None:
@@ -303,9 +288,8 @@ class TestDataDrivenExpansion:
             )
 
         assert call_count == 3  # all rows executed
-        assert result["rows_passed"] == 2
-        assert result["rows_failed"] == 1
-        assert result["success"] is False
+        assert result["row_summary"] == {"total": 3, "executed": 3, "passed": 2, "failed": 1}
+        assert result["status"] == "failed"
 
 
 class TestRunFlowDataDrivenRouting:
@@ -334,7 +318,7 @@ class TestRunFlowDataDrivenRouting:
             patch.object(EvaluateStep, "execute", new=execute),
         ):
             result = await executor._run_data_driven(
-                flow={"variables": {"key": "flow"}},
+                flow={"variables": {"key": "flow"}, "outputs": {"record": "{{results.record}}"}},
                 flow_path=Path("test.yaml"),
                 steps=[
                     {
@@ -351,7 +335,11 @@ class TestRunFlowDataDrivenRouting:
                 data_rows=[{"key": "row", "row": 1}, {"key": "row", "row": 2}],
                 start_time=time.time(),
             )
-        assert result["success"]
+        assert result["status"] == "passed"
+        assert result["outputs"] == {}
+        assert [row["outputs"] for row in result["rows"]] == [{"record": value} for value in seen]
+        assert [(row["label"], row["index"]) for row in result["rows"]] == [("row-1", 0), ("row-2", 1)]
+        assert all("row_data" not in row for row in result["rows"])
         assert seen == [{"key": "cli", "row": 1}, {"key": "cli", "row": 2}]
         assert runtimes[0] is not runtimes[1]
         assert runtimes[0].snapshot_results() == {"record": seen[0]}

@@ -304,8 +304,9 @@ async def test_continue_after_poll_failure_keeps_failed_flow_and_diagnostics(con
             output=context.output_dir,
             start_time=time.time(),
         )
-    assert not result["success"]
-    assert result["steps_executed"] == 2
-    assert result["failed_step"]["diagnostics"]["polls"][0]["results"] == {"task": "pending"}
+    assert result["status"] == "failed"
+    assert result["steps"] == {"total": 2, "executed": 2, "completed": 1}
+    assert result["errors"][0]["kind"] == "exhausted"
+    assert result["errors"][0]["diagnostics"]["polls"][0]["results"] == {"task": "pending"}
     assert page.evaluate.await_count == 2
     browser_context.close.assert_awaited_once()

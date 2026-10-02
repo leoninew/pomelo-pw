@@ -10,6 +10,17 @@ from click.testing import CliRunner
 
 from pomelo_pw import __version__
 from pomelo_pw.cli import cli
+from pomelo_pw.reporting import ExecutionReport
+
+
+def _report(message: str | None = None, row_label: str | None = None) -> dict[str, Any]:
+    report = ExecutionReport()
+    if message:
+        report.add_error(ValueError(message), "1", "wait")
+    result = report.result("sample", 10, screenshots=["ready.png"] if not message else [], completed=2)
+    if row_label:
+        result["errors"][0]["row"] = {"index": 1, "label": row_label}
+    return result
 
 
 def test_version_reports_package_version() -> None:
@@ -73,8 +84,19 @@ class TestBrowserCommands:
 class TestRunCommand:
     """Tests for flow runtime option dispatch."""
 
+    def test_missing_flow_returns_json_startup_error(self) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            result = runner.invoke(cli, ["run", "missing.yaml", "--json"])
+        assert result.exit_code == 1
+        payload = json.loads(result.stdout)
+        assert payload["status"] == "failed"
+        assert payload["errors"][0]["error_type"] == "FileNotFoundError"
+        assert payload["errors"][0]["kind"] == "startup"
+        assert "Loading flow" in result.stderr
+
     def test_run_json_success_exits_zero(self) -> None:
-        payload = {"success": True, "steps_executed": 2, "screenshots": ["ready.png"]}
+        payload = _report()
         runner = CliRunner()
         with runner.isolated_filesystem():
             Path("sample.yaml").write_text("steps: []\n", encoding="utf-8")
@@ -89,29 +111,8 @@ class TestRunCommand:
     @pytest.mark.parametrize(
         "payload",
         [
-            {
-                "success": False,
-                "steps_executed": 1,
-                "screenshots": [],
-                "failed_step": {
-                    "index": 1,
-                    "type": "wait",
-                    "error": "Condition timed out after 25ms",
-                    "context": {"screenshot": "error-step-2.png", "html_snapshot": "error-step-2.html"},
-                },
-            },
-            {
-                "success": False,
-                "data_driven": True,
-                "rows_total": 2,
-                "rows_passed": 1,
-                "rows_failed": 1,
-                "screenshots": [],
-                "row_results": [
-                    {"success": True, "row": "first"},
-                    {"success": False, "row": "second", "failed_step": {"error": "Row failed"}},
-                ],
-            },
+            _report("Condition timed out after 25ms"),
+            _report("Row failed", "second"),
         ],
         ids=["flow", "data-driven"],
     )
@@ -136,26 +137,23 @@ class TestRunCommand:
                 result = runner.invoke(cli, ["run", "sample.yaml", "--json"])
 
         assert result.exit_code == 1
-        assert json.loads(result.stdout) == {"success": False, "error": "Invalid wait condition"}
+        payload = json.loads(result.stdout)
+        assert payload["schema_version"] == 1
+        assert payload["status"] == "failed"
+        assert payload["errors"][0]["message"] == "Invalid wait condition"
+        assert payload["errors"][0]["kind"] == "startup"
         assert result.stderr == ""
 
     @pytest.mark.parametrize(
         ("payload", "expected"),
         [
-            ({"success": False, "error": "Invalid flow"}, "Invalid flow"),
+            (_report("Invalid flow"), "Invalid flow"),
             (
-                {"success": False, "failed_step": {"error": "extract rows[0].fields.name: element is missing"}},
+                _report("extract rows[0].fields.name: element is missing"),
                 "extract rows[0].fields.name: element is missing",
             ),
             (
-                {
-                    "success": False,
-                    "data_driven": True,
-                    "row_results": [
-                        {"success": True, "row": "first"},
-                        {"success": False, "row": "second", "failed_step": {"error": "Missing field"}},
-                    ],
-                },
+                _report("Missing field", "second"),
                 "Row second: Missing field",
             ),
         ],
@@ -175,19 +173,13 @@ class TestRunCommand:
 
     def test_run_reports_data_driven_summary(self) -> None:
         runner = CliRunner()
+        payload = _report()
+        payload["row_summary"] = {"total": 3, "executed": 3, "passed": 3, "failed": 0}
+        payload["artifacts"]["screenshots"] = ["homepage.png", "a.png", "b.png"]
         with runner.isolated_filesystem():
             Path("sample.yaml").write_text("steps: []\n", encoding="utf-8")
             with patch("pomelo_pw.cli.FlowExecutor") as executor_class:
-                executor_class.return_value.run_flow = AsyncMock(
-                    return_value={
-                        "success": True,
-                        "data_driven": True,
-                        "rows_total": 3,
-                        "rows_passed": 3,
-                        "rows_failed": 0,
-                        "screenshots": ["homepage.png", "a.png", "b.png"],
-                    }
-                )
+                executor_class.return_value.run_flow = AsyncMock(return_value=payload)
                 result = runner.invoke(cli, ["run", "sample.yaml"])
 
         assert result.exit_code == 0
@@ -200,9 +192,7 @@ class TestRunCommand:
         with runner.isolated_filesystem():
             Path("sample.yaml").write_text("steps: []\n", encoding="utf-8")
             with patch("pomelo_pw.cli.FlowExecutor") as executor_class:
-                executor_class.return_value.run_flow = AsyncMock(
-                    return_value={"success": True, "steps_executed": 0, "screenshots": []}
-                )
+                executor_class.return_value.run_flow = AsyncMock(return_value=_report())
                 result = runner.invoke(cli, ["run", "sample.yaml"])
 
         assert result.exit_code == 0
@@ -216,9 +206,7 @@ class TestRunCommand:
         with runner.isolated_filesystem():
             Path("sample.yaml").write_text("steps: []\n", encoding="utf-8")
             with patch("pomelo_pw.cli.FlowExecutor") as executor_class:
-                executor_class.return_value.run_flow = AsyncMock(
-                    return_value={"success": True, "steps_executed": 0, "screenshots": []}
-                )
+                executor_class.return_value.run_flow = AsyncMock(return_value=_report())
                 result = runner.invoke(cli, ["run", "sample.yaml", "-o", "artifacts"])
 
         assert result.exit_code == 0
@@ -231,13 +219,29 @@ class TestRunCommand:
         with runner.isolated_filesystem():
             Path("sample.yaml").write_text("steps: []\n", encoding="utf-8")
             with patch("pomelo_pw.cli.FlowExecutor") as executor_class:
-                executor_class.return_value.run_flow = AsyncMock(
-                    return_value={"success": True, "steps_executed": 0, "screenshots": []}
-                )
+                executor_class.return_value.run_flow = AsyncMock(return_value=_report())
                 result = runner.invoke(cli, ["run", "sample.yaml", "--headless"])
 
         assert result.exit_code == 0
         assert executor_class.return_value.run_flow.call_args.kwargs["headless"] is True
+
+    def test_json_redirects_execution_logs_to_stderr(self) -> None:
+        import click
+
+        async def execute(*args: Any, **kwargs: Any) -> dict[str, Any]:
+            click.echo("Loading flow")
+            print("[console] read completed")
+            return _report()
+
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            Path("sample.yaml").write_text("steps: []\n", encoding="utf-8")
+            with patch("pomelo_pw.cli.FlowExecutor") as executor_class:
+                executor_class.return_value.run_flow = execute
+                result = runner.invoke(cli, ["run", "sample.yaml", "--json", "--verbose"])
+        assert result.exit_code == 0
+        assert json.loads(result.stdout)["status"] == "passed"
+        assert result.stderr == "Loading flow\n[console] read completed\n"
 
 
 class TestValidateCommand:

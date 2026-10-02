@@ -29,6 +29,7 @@ Run browser automation flows using Pomelo PW.
 - `pomelo-pw run <flow-file> -o <dir>` - Override the flow output directory
 - `pomelo-pw run <flow-file> --var key=value` - Override variables
 - `pomelo-pw run <flow-file> --headless` - Headless mode
+- `pomelo-pw run <flow-file> --json` - One JSON report on stdout; execution logs on stderr
 - `pomelo-pw validate <flow-file>` - Validate without running
 - `pomelo-pw steps` - List all available steps
 - `pomelo-pw spec <step>` - Show step parameters
@@ -68,7 +69,7 @@ Pass data into browser functions through `args`; script source is literal:
 
 `${ }` is reserved for host languages such as JavaScript and is not processed as flow variable syntax.
 
-`save_as` binds successful public JSON output (currently supported by evaluate, extract, request and poll); read it with `{{results.response}}`. Results are shared by nested steps and isolated between data rows. Child parameters resolve at execution; child local variables do not leak into siblings. Input definitions may reference other inputs; cycles fail. Results stay opaque, even if strings contain template syntax. Rebinding replaces a result; a failed write clears the old binding, while its arguments may read the previous snapshot.
+`save_as` binds successful public JSON output (currently supported by evaluate, extract, request, poll and foreach); read it with `{{results.response}}`. Results are shared by nested steps and isolated between data rows. Child parameters resolve at execution; child local variables do not leak into siblings. Input definitions may reference other inputs; cycles fail. Results stay opaque, even if strings contain template syntax. Rebinding replaces a result; a failed write clears the old binding, while its arguments may read the previous snapshot.
 
 `evaluate.script` must be a synchronous or async function expression and explicitly return JSON data; use `return null` for no data. Omitted args passes no arguments; explicit null passes one null. Unsupported values, nonfinite numbers, and circular data fail. Migrate bare module bodies to functions and source interpolation to args; no compatibility adapters are provided.
 
@@ -278,6 +279,8 @@ Guard optional data with exists before accessing its fields. Static validation c
 
 Arrays are snapshotted on entry and traversed serially; empty arrays execute no children. Default names are `item`/`index`, with a zero-based index. Aliases must be distinct, non-reserved ASCII identifiers. Bindings override ordinary variables and CLI overrides, stay opaque, and are restored after nested loops. Old foreach times/while calls must use loop; loop requires exactly one mode, integer counts, and max_iterations only with while.
 
+Optional collect resolves once after each successful iteration in its item scope. Output is `{iterations, items}`; without collect, items is []. Bind it with save_as. max_collect_items defaults to 1000, max_collect_bytes to 1048576 JSON UTF-8 bytes (including array framing); both accept positive integer references and require collect. Exceeding a bound fails without replay or partial publication. Collect and child source stay literal until their execution scope.
+
 While checks its condition again after the last allowed iteration: false completes, true fails with exhaustion. There is no adapter for the old successful-exhaustion behavior.
 
 ### poll - Bounded Queries
@@ -299,7 +302,7 @@ While checks its condition again after the last allowed iteration: false complet
 
 The non-empty body runs immediately, then until reads fresh results. False waits interval after the round. Timeout (default 30000ms) includes body, condition, retries and delays; interval defaults to 1000ms. Both are finite positive numbers; optional max_attempts is a positive integer. All bounds support complete typed references. Nested polls cannot extend the parent's deadline. Exhaustion fails; a true condition on the final round succeeds. Keep writes before poll and declare read retries on children; poll rejects parent retry parameters.
 
-Successful output is `{attempts, elapsed_ms, results}` with the body's latest successful bindings. Terminal business failures may satisfy until; handle outcomes in later branches. Failure details live in failed_step.diagnostics.polls, including nested paths and prior successful values even after a failed rebind. At timeout no new operations start and late results are discarded; in-flight browser operations may finish, with late errors consumed. on_error=continue still reports an unsuccessful flow if any step failed.
+Successful output is `{attempts, elapsed_ms, results}` with the body's latest successful bindings. Terminal business failures may satisfy until; handle outcomes in later branches. Failure details live in errors[].diagnostics.polls, including nested paths and prior successful values even after a failed rebind. At timeout no new operations start and late results are discarded; in-flight browser operations may finish, with late errors consumed. on_error=continue still reports an unsuccessful flow if any step failed.
 
 ### request - Browser Session HTTP
 
@@ -338,6 +341,34 @@ Use extract for common DOM reads. It takes one synchronous snapshot without wait
 mode defaults to one (strict single root); all returns DOM-order values or mapped objects, including [] for no roots. Without fields, read roots directly. read defaults to textContent text with trim: true (outer whitespace only); false preserves text. attribute reads raw strings; url requires attribute and resolves against element.baseURI including HTML base. value reads current input/textarea/select strings, without numeric or checkbox-state conversion; other elements fail. fields cannot combine with root read/attribute/trim; trim only applies to text.
 
 Missing roots/fields/attributes fail by default. required: false returns null or an explicit JSON default (default requires false); empty strings are valid and false/0/null defaults are preserved. Root settings do not override fields. Multiple field matches always fail with row/field locations; empty all remains []. Output binds directly to foreach/conditions/poll; retries are explicit, poll discards late snapshots, and ExtractError preserves browser read errors. See example/public/dom-data-extraction.yaml. No legacy script adapters are provided.
+
+### assert - Explicit Expectations
+
+```yaml
+- type: assert
+  condition: {eq: ['{{results.summary.failed}}', 0]}
+  message: Some records failed
+```
+
+Uses the shared structured condition tree and short circuits. Only false raises AssertionFailed with the condition and visited values/results; evaluation errors stay execution errors. Default message is Assertion failed. There is no implicit waiting or retry.
+
+### Execution Report and Exports
+
+```yaml
+outputs:
+  outcomes: '{{results.collected.items}}'
+  summary: '{{results.summary}}'
+report:
+  steps: true
+  max_steps: 1000
+  include_outputs: false
+```
+
+outputs explicitly exports named JSON values from the final runtime snapshot. Keys are ASCII identifiers; missing/invalid references add output errors while other fields still export. Business failed/skipped categories have no implicit effect on execution status; enforce policy with assert. Use foreach.collect to retain per-item outcomes, and a short evaluate for custom summaries.
+
+run --json stdout is one schema_version=1 JSON document; all execution logs go to stderr. Passed exits 0, failed exits 1. Report fields are status/flow/duration_ms/outputs/steps/trace/errors/errors_dropped/artifacts/rows/row_summary. steps contains top-level total/executed/completed. trace contains enabled/entries/dropped; entries contain path/type/status/duration_ms and optional output. Errors contain path/type/kind/error_type/message/diagnostics/evidence; continue retains all failures within the configured bound. artifacts.screenshots lists screenshots, and error evidence retains HTML. No success/failed_step or other legacy report fields remain. validate --json still uses valid/errors.
+
+report defaults to steps=false, max_steps=1000, include_outputs=false, max_value_bytes=16384 and max_errors=100. include_outputs requires steps=true. Retries record one final logical step; control step duration includes children. Trace/error overflow counts dropped details, large values mark omitted/bytes, and messages mark truncation. Explicit exports stay complete. Data-driven rows have independent reports plus label/index, and their own exports; row inputs are not exported automatically. Aggregated trace/errors include row identity and remain bounded. See example/public/flow-assertions-results.yaml.
 
 ### Step-Level Retry
 
@@ -387,7 +418,7 @@ steps:
 - Each row runs all steps independently
 - Output goes to `<output>/<_label>/` or `<output>/row-N/`
 - Row variables override flow `variables`; CLI/API overrides remain highest priority
-- Result includes `rows_total`, `rows_passed`, `rows_failed`
+- Result includes `rows` and `row_summary: {total, executed, passed, failed}`
 
 ## Error Context
 

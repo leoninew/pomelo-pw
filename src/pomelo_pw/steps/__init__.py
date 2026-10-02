@@ -6,6 +6,7 @@ All steps are automatically registered via the @register_step decorator.
 
 # Import all step modules to trigger registration
 from pomelo_pw.steps import (
+    assertion,
     check,
     click,
     conditional,
@@ -47,6 +48,7 @@ __all__ = [
     "get_step",
     "list_steps",
     "register_step",
+    "assertion",
     "check",
     "click",
     "conditional",

@@ -1,0 +1,67 @@
+name: flow-assertions-results
+output_dir: output/flow-assertions-results
+variables:
+  expected_first_category: processed
+outputs:
+  outcomes: '{{results.collected.items}}'
+  summary: '{{results.summary}}'
+report:
+  steps: true
+  max_steps: 100
+steps:
+  - type: evaluate
+    script: |
+      () => {
+        document.body.innerHTML = `<h1>Processing results</h1><table>
+          <tbody>
+            <tr data-id="a"><td class="name">Record A</td><td class="status">ready</td></tr>
+            <tr data-id="b"><td class="name">Record B</td><td class="status">done</td></tr>
+            <tr data-id="c"><td class="name">Record C</td><td class="status">ready</td></tr>
+          </tbody></table>`;
+        return null;
+      }
+  - type: extract
+    selector: tbody tr
+    mode: all
+    fields:
+      id: {read: attribute, attribute: data-id}
+      name: {selector: .name}
+      status: {selector: .status}
+    save_as: records
+  - type: foreach
+    items: '{{results.records}}'
+    as: record
+    collect: '{{results.outcome}}'
+    save_as: collected
+    steps:
+      - type: if
+        condition: {eq: ['{{record.status}}', ready]}
+        then:
+          - type: evaluate
+            args: '{{record}}'
+            script: 'record => ({id: record.id, category: "processed"})'
+            save_as: outcome
+        else:
+          - type: evaluate
+            args: '{{record}}'
+            script: 'record => ({id: record.id, category: "skipped"})'
+            save_as: outcome
+  - type: evaluate
+    args: '{{results.collected.items}}'
+    script: |
+      items => ({
+        total: items.length,
+        processed: items.filter(item => item.category === "processed").length,
+        skipped: items.filter(item => item.category === "skipped").length,
+        failed: items.filter(item => item.category === "failed").length
+      })
+    save_as: summary
+  - type: assert
+    condition:
+      all:
+        - eq: ['{{results.summary.total}}', 3]
+        - eq: ['{{results.summary.failed}}', 0]
+        - eq: ['{{results.collected.items[0].category}}', '{{expected_first_category}}']
+    message: Unexpected processing results
+  - type: screenshot
+    file: outcomes.png

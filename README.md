@@ -130,7 +130,7 @@ steps:
 
 `evaluate.script` is a synchronous or async function expression, kept as literal source. Pass one JSON payload through `args`; omitted args calls the function with no arguments, while `args: null` passes one null argument. Return a JSON value explicitly (use `return null` when no data is needed). Unsupported values, nonfinite numbers, and circular data fail.
 
-Only output-producing steps support `save_as` (currently `evaluate`, `extract`, `request` and `poll`). A successful step publishes a copied result; another successful write replaces it. During replacement, arguments can read the previous value, but a failed attempt leaves the binding absent. Results are shared by nested steps and isolated between data rows. Child parameters resolve when the child executes; child variables do not leak into siblings. Returned strings are data and are never reinterpreted as templates. `output_dir` resolves before execution and can only use inputs.
+Only output-producing steps support `save_as` (currently `evaluate`, `extract`, `request`, `poll` and `foreach`). A successful step publishes a copied result; another successful write replaces it. During replacement, arguments can read the previous value, but a failed attempt leaves the binding absent. Results are shared by nested steps and isolated between data rows. Child parameters resolve when the child executes; child variables do not leak into siblings. Returned strings are data and are never reinterpreted as templates. `output_dir` resolves before execution and can only use inputs.
 
 This is a breaking contract change with no compatibility adapters. Migrate bare module bodies to functions and source interpolation to `args`. Complete references no longer force values to strings. Python step implementations use `StepContext.runtime`/`inputs` and `StepResult.output`, `control`, and `diagnostics`; `variables` and `StepResult.data` are removed. See [the offline example](example/public/runtime-results.yaml).
 
@@ -195,7 +195,7 @@ Each wait must choose exactly one mode: `condition`, `delay`, `selector`, `url`,
 
 `poll` executes its non-empty body immediately, then checks `until` against fresh results. False waits `interval` after the round before the next query. Timeout defaults to 30000ms and interval to 1000ms; both must be finite positive numbers. Optional `max_attempts` is a positive integer; all bounds accept complete typed references. Timeout includes body steps, conditions, child retries and delays, and nested polls share the outer deadline. Exhaustion fails; a true condition on the final allowed round succeeds.
 
-Declare retries on individual queries; poll rejects parent retry parameters. A terminal business failure can satisfy until and is handled by later branches. Optional `save_as` stores `{attempts, elapsed_ms, results}`, with the latest successful bindings produced by the body. Failures retain those results, condition, timing, phase and nested path under `failed_step.diagnostics.polls`. `on_error: continue` runs later steps but still reports a failed flow.
+Declare retries on individual queries; poll rejects parent retry parameters. A terminal business failure can satisfy until and is handled by later branches. Optional `save_as` stores `{attempts, elapsed_ms, results}`, with the latest successful bindings produced by the body. Failures retain those results, condition, timing, phase and nested path under `errors[].diagnostics.polls`. `on_error: continue` runs later steps but still reports a failed flow.
 
 Keep submissions before poll. At timeout, no new steps or retries start and late results are discarded; already-issued browser operations may finish and their errors are consumed. Polling does not undo side effects. See [the offline polling example](example/public/bounded-step-polling.yaml).
 
@@ -265,6 +265,41 @@ Missing single roots, field elements or attributes fail by default. Use `require
 
 `loop` requires exactly one of `times` (a nonnegative integer) or `while`; `max_iterations` is a positive integer allowed only with `while`. Both counts support complete typed references. After the final allowed while iteration, the condition is checked again: false completes, true fails with exhaustion. Old `foreach` count/while calls must use `loop`; no successful-exhaustion adapter is provided. Parent `if`/`loop`/`foreach` retries cover only the parent's own probe or setup; child failures never replay completed bodies. Declare retries on the child operation that needs them. Nested errors include the step path and collection index.
 
+### Assertions and Execution Reports
+
+```yaml
+outputs:
+  outcomes: '{{results.collected.items}}'
+report:
+  steps: true
+steps:
+  - type: foreach
+    items: '{{records}}'
+    as: record
+    collect: '{{results.outcome}}'
+    save_as: collected
+    steps:
+      - type: evaluate
+        args: '{{record}}'
+        script: 'record => ({id: record.id, category: "processed"})'
+        save_as: outcome
+  - type: assert
+    condition: {eq: ['{{results.collected.items[0].category}}', processed]}
+    message: Unexpected processing result
+```
+
+`assert` uses the shared condition tree and short circuits. False raises `AssertionFailed` with the condition, visited operands and probe results; evaluation errors remain execution errors. It adds no implicit wait or retry. `message` is a non-empty string, defaulting to `Assertion failed`.
+
+`foreach.collect` resolves once after each successful iteration, using that iteration's bindings and current results. Output is `{iterations, items}`; without collect, items is empty. Defaults are `max_collect_items: 1000` and `max_collect_bytes: 1048576` (JSON UTF-8 bytes including array framing); both accept positive integer references and require collect. Exceeding either bound fails without replaying bodies or publishing a partial collection.
+
+Top-level `outputs` explicitly exports named JSON values from the final runtime snapshot. Keys are ASCII identifiers. A missing/invalid reference adds an output error while other fields still export. Output classifications such as `failed: 5` do not change execution status: use assert to enforce business policy.
+
+`run --json` emits one JSON document on stdout and sends execution logs to stderr; exits are 0 for passed and 1 for failed. The API and CLI share `schema_version: 1`, `status: passed|failed`, `flow`, `duration_ms`, `outputs`, `steps: {total, executed, completed}`, `trace: {enabled, entries, dropped}`, `errors`, `errors_dropped`, `artifacts: {screenshots}`, `rows`, and `row_summary`. Steps count top-level scheduling and successful completion. Errors include path/type/kind/error_type/message/diagnostics/evidence; continue retains multiple failures. Nested paths use index-N/iter-N/attempt-N. Old success/failed_step fields are removed without adapters. `validate --json` keeps its separate valid/errors contract.
+
+Detailed trace is opt-in: report defaults to `steps: false`, `max_steps: 1000`, `include_outputs: false`, `max_value_bytes: 16384`, and `max_errors: 100`. Including outputs requires steps. Retries record one final logical step, and control steps include their child execution time. Excess trace/error details are counted as dropped; oversized values are marked `{omitted: true, bytes: ...}`, and messages mark truncation. Explicit exports remain complete. Data-driven rows each have this report plus label/index, independent outputs, and no automatic row input export. The aggregate reports row_summary total/executed/passed/failed and bounds merged errors/trace, with row identity on each entry.
+
+Try [the offline assertion/report example](example/public/flow-assertions-results.yaml).
+
 ### Author Flows
 
 The following flow shows the common pattern: navigate, interact, wait for a meaningful result, then capture evidence.
@@ -305,6 +340,7 @@ steps:
 | `save-state`, `load-state` | `file` | Reuse authenticated browser state |
 | `if`, `loop` | condition or iteration settings | Model branches and repeated actions |
 | `poll` | `until`, `steps` | Refresh results within a shared deadline |
+| `assert` | `condition`, optional `message` | Enforce an explicit expectation and report observed values |
 | `foreach` | `items`, `steps`, optional `as` / `index_as` | Traverse an array with local item and index bindings |
 | `evaluate` | `script`, optional `args` and `save_as` | Run a browser function and pass JSON data |
 | `request` | `url`, optional method/query/headers/json/response | Share browser cookies and bind HTTP responses |

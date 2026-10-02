@@ -34,6 +34,7 @@ pomelo-pw run example/public/data-driven-pages.yaml --var base_url=https://stagi
 | `public/bounded-step-polling.yaml` | Serial query rounds, fresh results, terminal outcomes and budgets | Yes, offline |
 | `public/session-http-request.yaml` | Browser Cookie sharing, typed HTTP payloads, query polling and text output | Start the local fixture below |
 | `public/dom-data-extraction.yaml` | DOM snapshots, field mapping, raw/absolute URLs, live values and foreach | Yes, offline |
+| `public/flow-assertions-results.yaml` | Per-item collection, assertions, exports and bounded execution reports | Yes, offline |
 | `public/visual-regression.yaml` | Screenshot baseline comparison | Yes, with Pillow |
 
 ## Runtime Results
@@ -111,6 +112,18 @@ uv run --locked --no-sync pomelo-pw run example/public/dom-data-extraction.yaml 
 ```
 
 Extract does not wait: use wait for page readiness first. Root selectors use Playwright, while field selectors use row-relative CSS (with :scope), without frame/Shadow DOM traversal. one is strict; all returns a possibly empty array. Missing required values and ambiguous field matches fail. Use required: false for null or an explicit JSON default; raw attributes, text and current form values remain strings. URL mode resolves against the element's baseURI.
+
+## Assertions and Execution Reports
+
+`public/flow-assertions-results.yaml` creates three offline records, extracts them, collects two processed and one skipped outcome, and exports those outcomes plus `{total: 3, processed: 2, skipped: 1, failed: 0}`. It asserts the summary and the first category, records nested step paths, and writes `outcomes.png`.
+
+```bash
+uv run --locked --no-sync pomelo-pw run example/public/flow-assertions-results.yaml --headless --json -v
+```
+
+stdout contains a single schema_version=1 JSON report, with logs on stderr. To exercise a controlled assertion failure and exit code 1, add `--var expected_first_category=unexpected`; outcomes/summary still export, and errors contain the visited values plus screenshot/HTML evidence. The successful path exits 0. Business outcome categories only affect execution status through explicit assertions.
+
+Optional report.steps records bounded execution detail; include_outputs requires steps and is off by default. Explicit exports are complete. foreach collection limits fail rather than truncating data, with no partial collection binding.
 
 ## Browser Interactions
 

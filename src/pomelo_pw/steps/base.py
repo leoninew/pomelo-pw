@@ -14,6 +14,8 @@ from pomelo_pw.runtime import IDENTIFIER, NO_OUTPUT, JsonValue, NoOutput, Runtim
 if TYPE_CHECKING:
     from playwright.async_api import Page
 
+    from pomelo_pw.reporting import ExecutionReport
+
 
 @dataclass
 class StepSpec:
@@ -40,6 +42,7 @@ class StepContext:
     scopes: tuple[dict[str, Any], ...] = ()
     bindings: dict[str, Any] = field(default_factory=dict)
     polls: tuple[PollProgress, ...] = ()
+    report: ExecutionReport | None = None
 
     @property
     def inputs(self) -> dict[str, Any]:

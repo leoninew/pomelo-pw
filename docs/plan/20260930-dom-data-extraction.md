@@ -1,5 +1,5 @@
 # T07 DOM 集合与字段提取实施计划
-最后修改时间: 2026-10-02 11:31:14
+最后修改时间: 2026-10-02 12:13:51
 
 ## Review status
 
@@ -7,7 +7,7 @@ Accepted
 
 ## Flow mode and stage
 
-标准模式 / standard，Intent/Plan 已接受，Implementation 已交付。用户自行试跑通过并明确要求完成本任务验证；Verification 的针对性回归、离线最小集成和静态检查已通过，发现的 CLI 摘要问题已修复，验证文档 Draft 待用户审阅，当前停在 T07。
+标准模式 / standard，Intent/Plan/Verification 已接受。用户已提交为 ee2b301 并要求推进 T08；本项针对性回归、离线最小集成和静态检查通过，发现的 CLI 摘要问题已修复。
 
 ## Intent basis
 
@@ -106,6 +106,8 @@ uv run --locked --no-sync pomelo-pw run example/public/dom-data-extraction.yaml 
 - 没有遗留必须修复事项，未运行全量测试或真实材料业务。当前停在 Verification，文档 Draft 待用户审阅，不暂存/提交或推进 T08。
 
 ## User review notes
+
+- 用户提交本项为 ee2b301 并要求推进下一步，据此接受 Verification；已进入 T08 Implementation。
 
 - Verification 的真实嵌套失败场景发现 CLI 文本摘要只读取顶层 error，忽略已有 failed_step.error 而显示 Unknown error。修复限于 CLI 摘要与对应回归；数据驱动摘要同样从已有失败行读取原因。实际范围新增 src/pomelo_pw/cli.py、tests/test_cli.py，没有新增执行结果格式或推进 T08。
 - 用户自行试跑反馈“All steps completed successfully”，随后明确要求先完成本任务 Verification，不推进后续任务。

@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from pomelo_pw.executor import FlowExecutor
+from pomelo_pw.reporting import CollectionLimitError
 from pomelo_pw.runtime import RuntimeContext
 from pomelo_pw.steps import get_step
 from pomelo_pw.steps.base import StepContext
@@ -25,6 +26,100 @@ def context(tmp_path: Path) -> StepContext:
 
 def test_foreach_registered_independently() -> None:
     assert get_step("foreach") is ForeachStep
+
+
+async def test_collect_resolves_each_item_scope_once_and_preserves_opaque_values(context: StepContext) -> None:
+    context.runtime.publish("source", [{"id": 1}, {"id": "{{missing}}"}, None])
+    result = await FlowExecutor()._execute_step(
+        {
+            "type": "foreach",
+            "items": "{{results.source}}",
+            "as": "record",
+            "variables": {"tag": "local"},
+            "collect": {"record": "{{record}}", "i": "{{index}}", "tag": "{{tag}}"},
+            "steps": [],
+            "save_as": "collected",
+        },
+        context,
+        "1",
+        1,
+    )
+    assert result.output == {
+        "iterations": 3,
+        "items": [
+            {"record": {"id": 1}, "i": 0, "tag": "local"},
+            {"record": {"id": "{{missing}}"}, "i": 1, "tag": "local"},
+            {"record": None, "i": 2, "tag": "local"},
+        ],
+    }
+    assert context.runtime.snapshot_results()["collected"] == result.output
+    assert context.bindings == {} and "tag" not in context.inputs
+
+
+@pytest.mark.parametrize("collect", [False, True])
+async def test_empty_and_uncollected_output(context: StepContext, collect: bool) -> None:
+    step: dict[str, Any] = {"type": "foreach", "items": [] if collect else [1, 2], "steps": [], "save_as": "out"}
+    if collect:
+        step["collect"] = "{{missing}}"
+    result = await FlowExecutor()._execute_step(step, context, "1", 1)
+    assert result.output == {"iterations": 0 if collect else 2, "items": []}
+
+
+@pytest.mark.parametrize("limits", [{"max_collect_items": 1}, {"max_collect_bytes": 4}])
+async def test_collection_limits_fail_without_replay_or_partial_publication(
+    context: StepContext,
+    limits: dict[str, int],
+) -> None:
+    context.runtime.publish("collected", ["old"])
+    context.page.evaluate = AsyncMock(return_value="large")  # type: ignore[method-assign]
+    with pytest.raises(CollectionLimitError):
+        await FlowExecutor()._execute_step(
+            {
+                "type": "foreach",
+                "items": [1, 2],
+                "collect": "{{results.value}}",
+                "save_as": "collected",
+                "retry": 2,
+                "steps": [{"type": "evaluate", "script": "() => 'large'", "save_as": "value"}],
+                **limits,
+            },
+            context,
+            "1",
+            1,
+        )
+    assert cast(MagicMock, context.page).evaluate.await_count == 1
+    assert "collected" not in context.runtime.snapshot_results()
+
+
+async def test_nested_collection_snapshots_survive_rebinding(context: StepContext) -> None:
+    result = await FlowExecutor()._execute_step(
+        {
+            "type": "foreach",
+            "items": [[1], [2, 3]],
+            "collect": "{{results.inner.items}}",
+            "steps": [
+                {
+                    "type": "foreach",
+                    "items": "{{item}}",
+                    "collect": "{{item}}",
+                    "steps": [],
+                    "save_as": "inner",
+                }
+            ],
+        },
+        context,
+        "1",
+        1,
+    )
+    assert result.output == {"iterations": 2, "items": [[1], [2, 3]]}
+
+
+async def test_collection_byte_limit_counts_utf8_and_array_framing(context: StepContext) -> None:
+    step = {"type": "foreach", "items": ["\u4e2d"], "steps": [], "collect": "{{item}}", "max_collect_bytes": 7}
+    result = await FlowExecutor()._execute_step(step, context, "1", 1)
+    assert result.output == {"iterations": 1, "items": ["\u4e2d"]}
+    with pytest.raises(CollectionLimitError, match="observed_bytes=7"):
+        await FlowExecutor()._execute_step({**step, "max_collect_bytes": 6}, context, "1", 1)
 
 
 @pytest.mark.parametrize(
@@ -53,7 +148,7 @@ def test_invalid_binding_names(field: str, alias: object) -> None:
         {"times": 1},
         {"while": {"eq": [1, 1]}},
         {"max_iterations": 2},
-        {"save_as": "records"},
+        {"max_collect_items": 1},
     ],
 )
 def test_conflicting_modes_and_bindings(extra: dict[str, Any]) -> None:

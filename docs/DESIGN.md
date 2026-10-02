@@ -128,7 +128,7 @@ JSON 相等递归区分布尔和数字，数字 1 与 1.0 相等；in 仅接受�
 
 `StepContext.bindings` 持有当前嵌套集合的运行时绑定，独立于 scopes 配置定义。绑定优先于普通变量与 CLI，内层同名绑定遮蔽外层，退出恢复；普通变量仍遵循既有优先级。引用解析器将绑定作为不透明数据，完整引用、字段和下标不重新解释字符串，条件使用同样的绑定快照。每轮复制元素，回写结果不改变活动集合。
 
-`_execute_with_retry()` 只执行单一步骤自身，`_execute_step()` 在重试完成后调度控制体；子步骤有各自重试边界。父控制步骤不会因子步骤失败重放已经完成的分支/迭代/写操作。集合通过 index-N 和子步骤路径定位错误，沿既有顶层失败证据路径传播，不新增报告契约或自动聚合结果。
+`_execute_with_retry()` 只执行单一步骤自身，`_execute_step()` 在重试完成后调度控制体；子步骤有各自重试边界。父控制步骤不会因子步骤失败重放已经完成的分支/迭代/写操作。集合通过 index-N 和子步骤路径定位错误。foreach.collect 保持原文，在每项完整成功后的作用域中解析一次并复制结果，返回 {iterations,items}；未配置 collect 时 items 为空。数量上限在下一项开始前检查，JSON UTF-8 字节上限包含数组括号和分隔符，逐项累加检查。超限抛 CollectionLimitError，不重放已完成的操作或发布部分集合。
 
 ### 5. 页面条件等待
 
@@ -148,7 +148,7 @@ WaitStep 按字段存在性校验恰好一种原生模式，拒绝多模式、nu
 
 在途单步骤和条件探测通过 shield 保留协议调用并消费迟到异常，结果发布和控制体调度留在调用端；超时后不开始新操作或发布迟到结果。页面 JS 和已经发出的浏览器操作可能继续完成，不提供副作用撤销或幂等性推断。
 
-每次轮询体成功发布 save_as 时，为活动的各层轮询保存独立最近结果；失败重绑定仍按 T01 清除 runtime 绑定，但诊断保留之前成功的值。成功 poll 输出 attempts/elapsed_ms/results，可再次 save_as。PollError 沿嵌套路径保留各层诊断，顶层 failed_step.diagnostics.polls 包含条件、预算、阶段、路径和最近结果。on_error=continue 只影响是否继续调度，任何步骤失败后最终 success 仍为 false。
+每次轮询体成功发布 save_as 时，为活动的各层轮询保存独立最近结果；失败重绑定仍按 T01 清除 runtime 绑定，但诊断保留之前成功的值。成功 poll 输出 attempts/elapsed_ms/results，可再次 save_as。PollError 沿嵌套路径保留各层诊断，统一报告 errors[].diagnostics.polls 包含条件、预算、阶段、路径和最近结果。on_error=continue 只影响是否继续调度，任何步骤失败后最终 status 仍为 failed。
 
 while 在 max_iterations 后再检查一次条件，false 正常完成、true 明确耗尽失败。固定 times 不变；不保留旧耗尽成功语义的适配。业务失败终态可以正常结束 poll，由后续分支或断言确定业务结果。
 
@@ -168,7 +168,21 @@ one 默认严格单元素，all 按 DOM 顺序返回数组（可空）；无 fie
 
 参数对象在传输边界编码为 JSON 字符串，浏览器回调内解码，避免 Playwright 的参数过滤递归省略 None 键，保留显式 null 默认值。原生读取错误转为 ExtractError，保留行与字段位置，沿既有嵌套路径和失败证据传播。结果使用 T01 JSON 快照与 save_as 契约，默认没有重试；poll 复用执行器既有总预算和迟到结果丢弃逻辑。快照只覆盖当前提取，不保证后续步骤仍观察到同一页面，页面就绪和类型转换由调用方表达。
 
-### 9. 流程执行
+### 9. 断言与结构化执行报告
+
+assert.condition 使用共享条件 evaluator 的一次运行时快照；可选 observations 仅记录访问过的操作数和节点结果，不重新求值、不访问短路分支。只有 false 抛 AssertionFailed，并携带 condition/observed；缺失引用、JS 非布尔和页面错误保留执行错误语义。message 通过普通参数解析，断言没有隐式等待或重试。
+
+`reporting.py` 定义唯一 RunReport 结构：schema_version/status/flow/duration_ms/outputs/steps/trace/errors/errors_dropped/artifacts/rows/row_summary，不保留旧字段。StepContext.report 共享有界 ExecutionReport，_execute_step 包装完整逻辑步骤，开始时预留 trace 条目保证嵌套顺序，最终记录通过/失败与单调时钟耗时；重试中间态不写入轨迹。poll 截止时间检查和结果发布仍在调用端，迟到操作不触发报告更新。
+
+顶层 steps 统计 total/executed/completed；子步骤由轨迹路径定位。嵌套 ExecutionStepError 沿因果链携带最深步骤位置，PollError 保留多层轮询诊断；错误包含 path/type/kind/error_type/message/diagnostics/evidence。每次顶层失败收集截图与 HTML，失败取证本身发生错误也不覆盖原原因；continue 追加所有失败。截图归入 artifacts，启动和清理失败亦产生统一报告。
+
+结束时固定 inputs/results 快照，逐字段解析 flow.outputs 并导出 JSON；导出失败追加 output 错误，其他字段继续。显式 exports 不自动公开所有输入或 runtime 结果，不静默截断；业务分类与报告 status 无隐式关联。
+
+report 缺省 steps=false/max_steps=1000/include_outputs=false/max_value_bytes=16384/max_errors=100。轨迹和错误受数量上限约束，省略详情计数不改变失败状态；输出及诊断超过字节上限标记 omitted/bytes，消息截断有标记。foreach 的业务集合由独立上限约束。data-driven 各行独立报告带 label/index，顶层汇总 steps/artifacts/errors/trace 和 row_summary，错误/轨迹带行定位且合并后仍有界；行输入不自动导出。
+
+CLI run --json 用 stdout 重定向将执行及 console 日志写入 stderr，最后 stdout 只输出一份 JSON；失败退出 1、成功退出 0。普通文本摘要读取新结构，validate --json 保留独立 valid/errors 结构。
+
+### 10. 流程执行
 
 `FlowExecutor` 负责加载、校验、执行流程：
 
@@ -196,6 +210,7 @@ one 默认严格单元素，all 按 DOM 顺序返回数组（可空）；无 fie
 | 步骤 | 必需参数 | 描述 |
 |------|----------|------|
 | `navigate` | `url` | 导航到 URL |
+| `assert` | `condition` | 检查预期，失败记录访问过的值 |
 | `screenshot` | `file` | 截图 |
 | `click` | `selector` | 点击元素 |
 | `fill` | `selector`, `value` | 填充表单 |

@@ -518,6 +518,34 @@ steps:
 
 ---
 
+## Collected Outcomes and Assertions
+
+```yaml
+name: collected-outcomes
+variables:
+  records: [{id: a}, {id: b}]
+outputs:
+  outcomes: '{{results.collected.items}}'
+report:
+  steps: true
+steps:
+  - type: foreach
+    items: '{{records}}'
+    as: record
+    collect: '{{results.outcome}}'
+    save_as: collected
+    steps:
+      - type: evaluate
+        args: '{{record}}'
+        script: 'record => ({id: record.id, category: "processed"})'
+        save_as: outcome
+  - type: assert
+    condition: {eq: ['{{results.collected.iterations}}', 2]}
+    message: Unexpected collection size
+```
+
+Run with --json for a single structured report on stdout (logs on stderr). Collection and export are explicit; failed business classifications require an assertion to fail execution. Detailed trace outputs are opt-in and bounded; explicit exports remain complete.
+
 ## Common Selector Patterns
 
 ```yaml

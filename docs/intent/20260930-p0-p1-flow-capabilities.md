@@ -1,5 +1,5 @@
 # P0/P1 流程能力任务系列
-最后修改时间: 2026-10-02 11:31:14
+最后修改时间: 2026-10-02 12:13:51
 
 ## Review status
 
@@ -7,9 +7,9 @@ Accepted
 
 ## Flow mode and stage
 
-标准模式 / standard，系列意图 / Intent 已接受；T01-T05 已交付，T03/T04/T05 分别提交为 a02b2f3、4d98eac、cc6cc24，Verification 已接受。T06 浏览器会话 HTTP 请求 Implementation 已交付并提交为 89eb7ef，未创建正式 Verification。T07 DOM 集合与字段提取 Intent/Plan 已接受，Implementation 已交付且用户自行试跑通过；Verification 技术检查通过，文档 Draft 待用户审阅，当前停在 T07。
+标准模式 / standard，系列意图 / Intent 已接受；T01-T05 已交付，T03/T04/T05 分别提交为 a02b2f3、4d98eac、cc6cc24，Verification 已接受。T06 浏览器会话 HTTP 请求 Implementation 已交付并提交为 89eb7ef，未创建正式 Verification。T07 已提交为 ee2b301，Verification 已接受。T08 Intent/Plan 已接受，Implementation 已交付至可用状态，当前停止供用户自行测试；未进入正式 Verification 或 T09。
 
-本系列按独立任务推进 Intent -> Plan -> Implementation -> Verification。系列拆分、T01 各审查阶段及 T02-T07 Intent/Plan 已接受；T08-T09 仍处于 Intent 草稿。各任务进入下一阶段时，在对应阶段目录使用相同文件名；系列入口的接受不自动表示所有任务的 Plan 或实现已经接受。
+本系列按独立任务推进 Intent -> Plan -> Implementation -> Verification。系列拆分、T01 各审查阶段及 T02-T08 Intent/Plan 已接受；T09 仍处于 Intent 草稿。各任务进入下一阶段时，在对应阶段目录使用相同文件名；系列入口的接受不自动表示所有任务的 Plan 或实现已经接受。
 
 ## Background
 
@@ -87,7 +87,7 @@ Pomelo PW 已提供导航、交互、等待、条件、循环和 evaluate，但�
 ## Decisions
 
 - 所有任务采用用户指定的标准模式，不因任务较小改用轻量模式。
-- 只使用 Draft / Accepted 作为阶段审查状态；当前为 T01/T03/T04/T05 Verification Accepted、T02-T07 Intent/Plan Accepted，T08-T09 Intent 为 Draft。
+- 只使用 Draft / Accepted 作为阶段审查状态；当前为 T01/T03/T04/T05/T07 Verification Accepted、T02-T08 Intent/Plan Accepted，T09 Intent 为 Draft。
 - 采用现有 Playwright 能力处理浏览器等待、DOM 定位和请求；不自建通用 JS/Python 表达式引擎。
 - 嵌套校验、参数解析时机和重试边界归入相关基础任务，不另立无关的全项目重构任务。
 - 用户明确“不做兼容适配”。各任务以新契约正确性为目标；必要的旧接口移除和仓库内调用迁移纳入对应任务，外部调用方迁移另行处理。
@@ -100,6 +100,8 @@ Pomelo PW 已提供导航、交互、等待、条件、循环和 evaluate，但�
 - 本地示例能验证组合能力，不能证明外部生产页面在数据并发变化或认证过期时的行为。
 
 ## User review notes
+
+- 用户提交 T07 为 ee2b301 后要求推进下一步，接受 T07 Verification；沿用无未决事项时开始实现的授权，接受 T08 Intent/Plan 并完成断言、逐项收集、显式导出和统一报告。250 项相关回归、收尾报告回归 15 项、14 文件静态检查及真实 CLI 成功/断言失败/缺失文件最小集成通过，交付见 [T08 Plan](../plan/20260930-flow-assertions-results.md)。当前停止供用户自行测试，没有正式 Verification、提交或推进 T09。
 
 - 用户要求使用 specflow 标准模式，将 P0 和 P1 拆分为一系列任务。
 - 用户随后要求“按顺序推进”，视为接受系列拆分及 T01 Intent，进入 T01 Plan。
