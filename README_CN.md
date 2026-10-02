@@ -130,7 +130,7 @@ steps:
 
 `evaluate.script` 必须是同步或 async 函数表达式，源码保持原文。通过 `args` 传递单个 JSON 载荷；未提供 args 时不传参数，`args: null` 则传入一个 null 参数。函数必须明确返回 JSON 值，不需要数据时可 `return null`；不支持的类型、非有限数字和循环数据会报错。
 
-只有产生公开输出的步骤支持 `save_as`，当前为 `evaluate` 和 `poll`。成功后保存结果快照，再次成功写入会覆盖。替换时参数可以读取上一次值，但失败会使该绑定失效。嵌套步骤共享结果，data 行之间隔离。子步骤执行时才解析参数，子步骤局部变量不会泄漏给兄弟步骤。结果字符串始终作为数据，不重新解释为模板。`output_dir` 在运行前解析，只能读取输入。
+只有产生公开输出的步骤支持 `save_as`，当前为 `evaluate`、`request` 和 `poll`。成功后保存结果快照，再次成功写入会覆盖。替换时参数可以读取上一次值，但失败会使该绑定失效。嵌套步骤共享结果，data 行之间隔离。子步骤执行时才解析参数，子步骤局部变量不会泄漏给兄弟步骤。结果字符串始终作为数据，不重新解释为模板。`output_dir` 在运行前解析，只能读取输入。
 
 这是不提供兼容适配的接口变更：裸模块代码改为函数，源码中的输入插值改为 `args`；完整引用不再强制转成字符串。Python 步骤实现改用 `StepContext.runtime`/`inputs` 和 `StepResult.output`、`control`、`diagnostics`，移除原 `variables` 和 `StepResult.data`。可直接运行[离线示例](example/public/runtime-results.yaml)。
 
@@ -180,15 +180,14 @@ steps:
 
 ```yaml
 - type: poll
-  until: {in: ["{{results.task.status}}", [ready, failed]]}
+  until: {in: ["{{results.task.body.status}}", [ready, failed]]}
   timeout: 30000
   interval: 1000
   max_attempts: 20
   save_as: polling
   steps:
-    - type: evaluate
-      args: {id: "{{results.submitted.id}}"}
-      script: "async ({id}) => { const r = await fetch('/tasks/' + id); if (!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); }"
+    - type: request
+      url: "/api/tasks/{{results.submitted.body.id}}"
       save_as: task
       retry: 2
       retry_delay: 250
@@ -199,6 +198,30 @@ steps:
 读取重试在对应子步骤声明，poll 拒绝自身 retry 参数。业务失败终态可以满足 until，之后通过分支判断业务结果。可选 save_as 保存 `{attempts, elapsed_ms, results}`，results 为轮询体最近成功发布的绑定。失败时将最近结果、条件、时限、阶段及嵌套路径保留在 `failed_step.diagnostics.polls`。`on_error: continue` 继续后续步骤，但最终仍报告流程失败。
 
 提交操作放在轮询之前。超时后不启动新步骤或重试，不发布迟到结果；已经发出的浏览器操作可能继续完成，迟到异常会被消费，轮询不撤回副作用。可自行运行[离线轮询示例](example/public/bounded-step-polling.yaml)。
+
+### 浏览器会话 HTTP 请求
+
+```yaml
+- type: request
+  url: /api/tasks
+  method: POST
+  headers: {Authorization: "Bearer {{token}}"}
+  json: {record_id: "{{record.id}}", enabled: false, metadata: null}
+  expected_status: 201
+  save_as: submitted
+- type: request
+  url: "/api/tasks/{{results.submitted.body.id}}"
+  query: {details: true}
+  save_as: task
+```
+
+`request` 使用当前 BrowserContext 的请求客户端，共享浏览器 Cookie 及响应 Cookie 更新。相对 URL 以当前 HTTP(S) 页面 URL 为基准，不读取 HTML base 标签；绝对 HTTP(S) 地址也可在 about:blank 上使用。请求不经过页面 fetch、CORS、页面 route 拦截或 Service Worker。重定向遵循 Playwright 行为，状态检查和输出针对最终响应。额外认证/CSRF 请求头由调用方显式传入，不自动复制 localStorage token。
+
+默认 method 为 GET、timeout 为 30000ms、response 为 json，接受全部 2xx 状态。method 只接受大写 GET/HEAD/POST/PUT/PATCH/DELETE/OPTIONS。query 为非空字符串键与字符串/有限数字/布尔值的对象，布尔值编码为小写 true/false；headers 为非空字符串键与字符串值的对象。对象和字段都支持类型化引用，解析后再次校验。json 接受任意 JSON 值，显式 null 发送 JSON null，省略则不发送请求体；GET/HEAD 禁止 json。JSON 请求的缺省 Content-Type 为 application/json，可显式覆盖。
+
+输出唯一为 `{url, status, headers, body}`，通过 `{{results.task.body.status}}` 读取 JSON 字段。文本或空响应（包括 HEAD/204）选择 `response: text`；空/非法 JSON 明确失败，不自动降级。expected_status 可指定单个 HTTP 状态整数或非空整数列表（100-599），先检查状态再解析。HTTP 成功不等于业务成功。
+
+请求超时覆盖网络及响应读取，并按 poll 剩余预算收紧。在途协议调用可能在超时后完成；迟到响应被释放、异常被消费、输出被丢弃。读取后释放响应缓存，不销毁共享客户端。失败分别为 RequestNetworkError、RequestTimeoutError、RequestStatusError 和 RequestResponseError。不默认重试；显式 retry 使用现有单步骤策略，可用 retry_on 按错误类名筛选。写请求的幂等性由调用方负责。可运行[本地会话请求示例](example/public/session-http-request.yaml)，服务启动方式见[示例说明](example/README.md#browser-session-http-requests)。
 
 ### 集合遍历
 
@@ -259,6 +282,7 @@ steps:
 | `poll` | `until`、`steps` | 在统一时限内刷新数据并检查终态 |
 | `foreach` | `items`、`steps`，可选 `as` / `index_as` | 遍历数组，提供局部元素和索引绑定 |
 | `evaluate` | `script`，可选 `args` 和 `save_as` | 执行页面函数并传递 JSON 数据 |
+| `request` | `url`，可选 method/query/headers/json/response | 共享浏览器 Cookie 并绑定 HTTP 响应 |
 | `scroll`、`set-viewport` | 各步骤参数 | 调整滚动位置或视口 |
 
 在编写 flow 前，先列出可用步骤或查看某一步骤的精确参数：

@@ -1,5 +1,5 @@
 # T05 有界步骤轮询实施计划
-最后修改时间: 2026-10-02 09:56:33
+最后修改时间: 2026-10-02 10:26:51
 
 ## Review status
 
@@ -7,7 +7,7 @@ Accepted
 
 ## Flow mode and stage
 
-标准模式 / standard，Intent/Plan 已接受，Implementation 已交付，当前验证阶段 / Verification。用户查看交付后要求开始验证，针对性回归、离线最小集成及静态检查已通过，Verification 为 Draft 待用户审阅；不自动推进 T06。
+标准模式 / standard，Intent/Plan 已接受，Implementation 已交付，Verification 检查通过并已接受。用户要求继续下一任务，进入 T06；不执行 Git 写操作。
 
 ## Intent basis
 
@@ -105,7 +105,7 @@ uv run --locked --no-sync pytest tests/test_poll.py tests/test_executor_control_
 - 离线 polling 示例通过，两个任务均在第 3 轮结束并汇总为 ready=1/failed=1；真实 CLI 轮次耗尽与总超时退出 1，continue 模式保留失败及证据。
 - 真实浏览器慢查询/慢条件在 75ms 配置下各约 94ms 返回超时，迟到结果不发布、迟到异常被消费；浏览器关闭后无未结束操作或事件循环错误。
 - v4 仅静态校验通过，未执行真实材料业务；未跑全量测试、覆盖率或开发服务器。
-- 没有产品代码缺陷或修复，只修正辅助验收脚本的证据字段名。完整证据与限制见 [T05 Verification](../verification/20260930-bounded-step-polling.md)。当前等待用户审阅，不自动进入 T06 或执行 Git 写操作。
+- 没有产品代码缺陷或修复，只修正辅助验收脚本的证据字段名。完整证据与限制见 [T05 Verification](../verification/20260930-bounded-step-polling.md)。用户要求继续下一任务，验收已接受，进入 T06；不执行 Git 写操作。
 
 ## User review notes
 

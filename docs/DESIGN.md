@@ -1,5 +1,5 @@
 # Pomelo PW - Flow-based UI Automation Tool
-最后修改时间: 2026-10-01 21:57:26
+最后修改时间: 2026-10-02 10:22:02
 
 ## 项目概述
 
@@ -152,7 +152,15 @@ WaitStep 按字段存在性校验恰好一种原生模式，拒绝多模式、nu
 
 while 在 max_iterations 后再检查一次条件，false 正常完成、true 明确耗尽失败。固定 times 不变；不保留旧耗尽成功语义的适配。业务失败终态可以正常结束 poll，由后续分支或断言确定业务结果。
 
-### 7. 流程执行
+### 7. 浏览器会话 HTTP 请求
+
+`request` 通过当前 `page.context.request.fetch` 复用 Cookie 及响应 Set-Cookie 更新，不创建独立客户端、不读取 localStorage token。使用标准 urljoin/urlsplit 解析相对地址，基准为当前 HTTP(S) page.url，与页面 base 标签无关；绝对 HTTP(S) 地址不要求页面已导航。请求不经过页面 fetch、CORS、page.route 或 Service Worker，重定向和查询参数处理使用 Playwright 契约。
+
+字段在步骤执行时按现有 resolver 解析；query/headers 接受对象完整引用，子字段保留类型，运行前再次校验。query 的布尔值通过标准 JSON 序列化为小写 true/false，其他标量交给 Playwright 编码。json 使用标准序列化明确发送 null 与嵌套 JSON；GET/HEAD 禁止请求体，不增加 data/form/multipart 别名。缺省 GET/30000ms/json/2xx，expected_status 可声明整数或非空列表，先检查状态再读取响应。输出仅包含 url/status/headers/body，JSON 与 text 保持同一个结构，不自动解析降级。
+
+asyncio.timeout_at 覆盖请求和响应读取，Playwright fetch 使用有限的原生 timeout；执行器现有逻辑按 poll 剩余预算收紧并阻止迟到结果发布。在途任务通过 shield 保留协议调用，强引用集合持有到完成，回调消费迟到异常；截止时间后不再解析迟到响应。APIResponse 在 finally 中释放，不销毁共享 APIRequestContext。错误分类为 RequestNetworkError/RequestTimeoutError/RequestStatusError/RequestResponseError，沿现有嵌套步骤定位和 CLI 失败出口传播；请求消息不主动输出头或 body。显式 retry 复用现有单步骤语义，默认没有请求重试；幂等性由调用方决定。
+
+### 8. 流程执行
 
 `FlowExecutor` 负责加载、校验、执行流程：
 
@@ -192,6 +200,7 @@ while 在 max_iterations 后再检查一次条件，false 正常完成、true �
 | `check` | `selector` | 勾选复选框 |
 | `uncheck` | `selector` | 取消勾选 |
 | `evaluate` | `script` | 执行函数表达式，可用 args 传参、save_as 绑定 JSON 输出 |
+| `request` | `url` | 复用浏览器 Cookie，请求 JSON/文本并绑定 url/status/headers/body |
 | `poll` | `until`, `steps` | 有界查询轮询，可用 save_as 绑定轮次、耗时和最近结果 |
 | `set-viewport` | - | 设置视口 |
 

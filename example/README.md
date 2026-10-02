@@ -32,6 +32,7 @@ pomelo-pw run example/public/data-driven-pages.yaml --var base_url=https://stagi
 | `public/collection-iteration.yaml` | Serial arrays, nested bindings, source snapshots, scope restoration | Yes, offline |
 | `public/page-condition-wait.yaml` | Combined SPA readiness, native JS waits, structured args | Yes, offline |
 | `public/bounded-step-polling.yaml` | Serial query rounds, fresh results, terminal outcomes and budgets | Yes, offline |
+| `public/session-http-request.yaml` | Browser Cookie sharing, typed HTTP payloads, query polling and text output | Start the local fixture below |
 | `public/visual-regression.yaml` | Screenshot baseline comparison | Yes, with Pillow |
 
 ## Runtime Results
@@ -83,6 +84,22 @@ uv run --locked --no-sync pomelo-pw run example/public/bounded-step-polling.yaml
 ```
 
 Poll requires a non-empty steps body and a structured until condition. The first round is immediate; interval is measured after each unsuccessful round. Timeout covers queries, conditions, retries and delays. Use child retries for reads and keep submissions outside poll. Successful save_as includes attempts, elapsed_ms and the body's latest successful bindings; exhausted limits fail. While also fails if its condition remains true after max_iterations.
+
+## Browser Session HTTP Requests
+
+`public/session-http-request.yaml` uses a loopback fixture, with no external site or real credentials. Start the fixture in one terminal, then run the flow in another:
+
+```bash
+uv run --locked --no-sync python example/support/session_http_server.py --port 8766
+```
+
+```bash
+uv run --locked --no-sync pomelo-pw run example/public/session-http-request.yaml --headless -v
+```
+
+If the port is occupied, choose a different `--port` and pass the matching `--base-url http://127.0.0.1:PORT` to the flow. Stop the fixture with Ctrl+C afterward. The flow signs in through the page, sends typed query/header/JSON values, checks response Cookie updates, polls a task to ready on the second query, reads a text response and writes `session.png`.
+
+Request defaults to GET/JSON/2xx with a finite 30000ms timeout. Relative URLs need a current HTTP(S) page. Read content through `results.NAME.body`; expected HTTP errors can be listed explicitly with expected_status. Empty or text responses require response: text. Only explicit retry replays a request; keep submissions outside poll and choose read retry_on filters when needed.
 
 ## Browser Interactions
 

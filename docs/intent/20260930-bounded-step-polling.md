@@ -1,5 +1,5 @@
 # T05 有界步骤轮询
-最后修改时间: 2026-10-02 09:51:08
+最后修改时间: 2026-10-02 10:26:51
 
 ## Review status
 
@@ -7,7 +7,7 @@ Accepted
 
 ## Task metadata
 
-- 流程：标准模式 / standard，Intent/Plan 已接受，Implementation 已交付，Verification 技术检查通过，文档为 Draft 待用户审阅。
+- 流程：标准模式 / standard，Intent/Plan 已接受，Implementation 已交付，Verification 技术检查通过并已接受；用户要求继续 T06。
 - 优先级：P0；依赖：[T01](20260930-runtime-result-context.md)、[T02](20260930-structured-flow-conditions.md)；工作量：2-3 人日。
 - 系列入口：[P0/P1 流程能力任务系列](20260930-p0-p1-flow-capabilities.md)。
 

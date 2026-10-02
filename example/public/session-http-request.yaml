@@ -1,0 +1,71 @@
+name: session-http-request
+description: Local browser Cookie login followed by typed HTTP submission and bounded queries.
+headless: false
+output_dir: output/session-http-request
+variables:
+  base_url: http://127.0.0.1:8766
+  payload: {count: 0, enabled: false, meta: null}
+  example_header: demo
+steps:
+  - type: navigate
+    url: '{{base_url}}/'
+  - type: click
+    selector: '#login'
+  - type: wait
+    condition: {page: {text_contains: Signed in}}
+    timeout: 3000
+  - type: request
+    url: /api/session
+    query: {page: 0, active: false}
+    save_as: session
+  - type: request
+    url: /api/tasks
+    method: POST
+    headers: {X-Example: '{{example_header}}'}
+    json: '{{payload}}'
+    expected_status: 201
+    save_as: submitted
+  - type: poll
+    until: {eq: ['{{results.task.body.status}}', ready]}
+    timeout: 3000
+    interval: 50
+    max_attempts: 3
+    save_as: polling
+    steps:
+      - type: request
+        url: '/api/tasks/{{results.submitted.body.id}}'
+        retry: 1
+        retry_delay: 50
+        retry_on: [RequestNetworkError, RequestTimeoutError]
+        save_as: task
+  - type: request
+    url: /api/message
+    response: text
+    save_as: message
+  - type: evaluate
+    args:
+      session: '{{results.session.body}}'
+      submitted: '{{results.submitted.body}}'
+      task: '{{results.task.body}}'
+      polling: '{{results.polling}}'
+      message: '{{results.message.body}}'
+    script: |
+      ({session, submitted, task, polling, message}) => {
+        if (!session.authenticated || session.query.page[0] !== '0' || session.query.active[0] !== 'false') {
+          throw new Error('Browser Cookie or query data was not shared');
+        }
+        if (submitted.payload.count !== 0 || submitted.payload.enabled !== false ||
+            submitted.payload.meta !== null || submitted.header !== 'demo') {
+          throw new Error('Typed JSON or headers changed');
+        }
+        if (!document.cookie.includes('request_seen=1')) throw new Error('Response Cookie was not shared');
+        if (task.status !== 'ready' || task.reads !== 2 || polling.attempts !== 2 || message !== 'ready') {
+          throw new Error('HTTP polling or text output failed');
+        }
+        const summary = {id: task.id, status: task.status, attempts: polling.attempts, message};
+        document.querySelector('#summary').textContent = JSON.stringify(summary, null, 2);
+        return summary;
+      }
+    save_as: summary
+  - type: screenshot
+    file: session.png

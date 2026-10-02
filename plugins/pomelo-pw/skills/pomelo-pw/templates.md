@@ -310,21 +310,38 @@ Use child retries for individual operations; parent retries do not replay comple
 
 ```yaml
 - type: poll
-  until: {in: ["{{results.task.status}}", [ready, failed]]}
+  until: {in: ["{{results.task.body.status}}", [ready, failed]]}
   timeout: 30000
   interval: 1000
   max_attempts: 20
   save_as: polling
   steps:
-    - type: evaluate
-      args: {id: "{{results.submitted.id}}"}
-      script: "async ({id}) => { const r = await fetch('/tasks/' + id); if (!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); }"
+    - type: request
+      url: "/api/tasks/{{results.submitted.body.id}}"
       save_as: task
       retry: 2
       retry_delay: 250
 ```
 
 Submit before this step. The first query is immediate; timeout includes child retries and intervals. Both ready and failed end polling, so handle the business result afterward. Exhaustion fails, and save_as records attempts, elapsed_ms and the latest successful body bindings.
+
+### Browser Session HTTP Submission
+
+```yaml
+- type: request
+  url: /api/tasks
+  method: POST
+  headers: {Authorization: "Bearer {{token}}"}
+  json: {record_id: "{{record.id}}", metadata: null}
+  expected_status: 201
+  save_as: submitted
+- type: request
+  url: "/api/tasks/{{results.submitted.body.id}}"
+  query: {details: true}
+  save_as: task
+```
+
+Navigate or sign in first for relative URLs and browser cookies. Response content is under body; status and headers remain separate. Extra authentication headers are explicit. Use response: text for non-JSON or empty responses, and keep submissions outside poll. Retry is opt-in and may replay writes; read retries can filter RequestNetworkError and RequestTimeoutError.
 
 ## Data-Driven Testing
 

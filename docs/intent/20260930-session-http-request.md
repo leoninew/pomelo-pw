@@ -1,13 +1,13 @@
 # T06 浏览器会话 HTTP 请求
-最后修改时间: 2026-09-30 12:50:26
+最后修改时间: 2026-10-02 10:26:51
 
 ## Review status
 
-Draft
+Accepted
 
 ## Task metadata
 
-- 流程：标准模式 / standard，意图阶段 / Intent。
+- 流程：标准模式 / standard，Intent/Plan 已接受，Implementation 已交付，当前停止供用户自行测试；尚未进入正式 Verification。
 - 优先级：P1；依赖：[T01](20260930-runtime-result-context.md)；工作量：1-2 人日。
 - 系列入口：[P0/P1 流程能力任务系列](20260930-p0-p1-flow-capabilities.md)。
 
@@ -51,6 +51,7 @@ Draft
 - 使用 Playwright 当前 BrowserContext 的请求能力，复用现有依赖和浏览器生命周期。
 - 会话复用仅承诺 Cookie 范围，额外认证头由调用方显式提供。
 - 使用唯一的请求与输出契约，不提供旧脚本或旧结果格式的兼容层。
+- 新增 request，默认 GET、30000ms、JSON 响应及 2xx 状态；相对 URL 以当前 HTTP(S) 页面 URL 为基准，输出统一为 url/status/headers/body。具体约束见 [T06 Plan](../plan/20260930-session-http-request.md)。
 
 ## Risks
 
@@ -58,4 +59,6 @@ Playwright 请求并非页面 fetch 的所有语义完全等价。URL、缓存�
 
 ## User review notes
 
-依据用户对 P0/P1 的任务拆分要求创建，等待意图审阅。
+- 用户要求继续下一任务，接受 T05 验收并进入 T06；沿用此前“没有未决事项就开始实现”的授权，接受本项 Intent/Plan 后实施。
+- 达到局部可用状态后停下供用户自行测试，不自动进入正式 Verification 或 T07。开发检查限于变更文件及必要的针对性测试，不运行全量测试。
+- request 已达到可用状态；两个相关测试文件 58 项通过，4 个 Python 文件格式/lint/类型通过，本地 Chrome 示例及真实 HTTP 超时检查通过。完整交付见 T06 Plan，不创建正式 Verification，不自动提交。

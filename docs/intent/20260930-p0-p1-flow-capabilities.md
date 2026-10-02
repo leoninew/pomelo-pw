@@ -1,5 +1,5 @@
 # P0/P1 流程能力任务系列
-最后修改时间: 2026-10-02 09:51:08
+最后修改时间: 2026-10-02 10:26:51
 
 ## Review status
 
@@ -7,9 +7,9 @@ Accepted
 
 ## Flow mode and stage
 
-标准模式 / standard，系列意图 / Intent 已接受；T01-T04 已交付，T03/T04 分别提交为 a02b2f3 与 4d98eac，Verification 已接受。T05 Implementation 已交付，Verification 技术检查通过，文档为 Draft 待用户审阅，不自动推进 T06。
+标准模式 / standard，系列意图 / Intent 已接受；T01-T05 已交付，T03/T04/T05 分别提交为 a02b2f3、4d98eac、cc6cc24，Verification 已接受。T06 浏览器会话 HTTP 请求 Implementation 已交付，Intent/Plan 已接受，当前停止供用户自行测试，未进入正式 Verification 或 T07。
 
-本系列按独立任务推进 Intent -> Plan -> Implementation -> Verification。系列拆分、T01 各审查阶段及 T02-T05 Intent/Plan 已接受；T06-T09 仍处于 Intent 草稿。各任务进入下一阶段时，在对应阶段目录使用相同文件名；系列入口的接受不自动表示所有任务的 Plan 或实现已经接受。
+本系列按独立任务推进 Intent -> Plan -> Implementation -> Verification。系列拆分、T01 各审查阶段及 T02-T06 Intent/Plan 已接受；T07-T09 仍处于 Intent 草稿。各任务进入下一阶段时，在对应阶段目录使用相同文件名；系列入口的接受不自动表示所有任务的 Plan 或实现已经接受。
 
 ## Background
 
@@ -87,7 +87,7 @@ Pomelo PW 已提供导航、交互、等待、条件、循环和 evaluate，但�
 ## Decisions
 
 - 所有任务采用用户指定的标准模式，不因任务较小改用轻量模式。
-- 只使用 Draft / Accepted 作为阶段审查状态；当前为 T01/T03/T04 Verification Accepted、T02-T05 Intent/Plan Accepted，T06-T09 Intent 为 Draft。
+- 只使用 Draft / Accepted 作为阶段审查状态；当前为 T01/T03/T04/T05 Verification Accepted、T02-T06 Intent/Plan Accepted，T07-T09 Intent 为 Draft。
 - 采用现有 Playwright 能力处理浏览器等待、DOM 定位和请求；不自建通用 JS/Python 表达式引擎。
 - 嵌套校验、参数解析时机和重试边界归入相关基础任务，不另立无关的全项目重构任务。
 - 用户明确“不做兼容适配”。各任务以新契约正确性为目标；必要的旧接口移除和仓库内调用迁移纳入对应任务，外部调用方迁移另行处理。
@@ -120,3 +120,5 @@ Pomelo PW 已提供导航、交互、等待、条件、循环和 evaluate，但�
 - 用户追加前置要求，将 K12 的原始材料脚本改写为 material-parse-all-v4.yaml；新文件使用已提交的结果/foreach/页面条件等待能力，静态校验通过后被移至本项目 dist，按当前位置保留。随后完成 T05 的 poll、嵌套预算/失败诊断、while 耗尽及继续执行失败汇总，相关 7 个 Python 文件静态检查与离线示例校验通过；未运行测试。交付记录见 [T05 Plan](../plan/20260930-bounded-step-polling.md)，当前停止待用户试跑。
 - 用户随后要求开始验证，当前进入 T05 Verification；只运行针对性回归和离线最小集成，不执行真实业务或全量测试，发现缺陷当轮修复。
 - T05 的 120 项相关回归、离线 polling 示例、两个真实 CLI 失败场景及两个真实浏览器异步超时场景通过；7 个变更 Python 文件静态检查及 v4 静态校验通过。未发现产品代码缺陷，未执行全量测试或真实材料业务；[T05 Verification](../verification/20260930-bounded-step-polling.md) 为 Draft，当前停止待用户审阅。
+- 用户自行提交 T05 为 cc6cc24，随后要求继续下一任务；T05 Verification 据此 Accepted。沿用“没有未决事项就开始实现”，接受 [T06 Intent](20260930-session-http-request.md)/[T06 Plan](../plan/20260930-session-http-request.md)，进入浏览器会话 HTTP 请求 Implementation，达到可用状态后停止供用户测试。
+- T06 新增 request，复用 Cookie、类型化参数、JSON/文本响应和 poll 预算；两个相关测试文件最终 58 项通过，4 个 Python 文件静态检查、新 YAML 校验、本地 Chrome 会话请求示例及真实 HTTP 超时检查通过。交付记录见 T06 Plan，当前停在 Implementation，没有创建 Verification 或执行 Git 写操作。

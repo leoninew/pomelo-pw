@@ -130,7 +130,7 @@ steps:
 
 `evaluate.script` is a synchronous or async function expression, kept as literal source. Pass one JSON payload through `args`; omitted args calls the function with no arguments, while `args: null` passes one null argument. Return a JSON value explicitly (use `return null` when no data is needed). Unsupported values, nonfinite numbers, and circular data fail.
 
-Only output-producing steps support `save_as` (currently `evaluate` and `poll`). A successful step publishes a copied result; another successful write replaces it. During replacement, arguments can read the previous value, but a failed attempt leaves the binding absent. Results are shared by nested steps and isolated between data rows. Child parameters resolve when the child executes; child variables do not leak into siblings. Returned strings are data and are never reinterpreted as templates. `output_dir` resolves before execution and can only use inputs.
+Only output-producing steps support `save_as` (currently `evaluate`, `request` and `poll`). A successful step publishes a copied result; another successful write replaces it. During replacement, arguments can read the previous value, but a failed attempt leaves the binding absent. Results are shared by nested steps and isolated between data rows. Child parameters resolve when the child executes; child variables do not leak into siblings. Returned strings are data and are never reinterpreted as templates. `output_dir` resolves before execution and can only use inputs.
 
 This is a breaking contract change with no compatibility adapters. Migrate bare module bodies to functions and source interpolation to `args`. Complete references no longer force values to strings. Python step implementations use `StepContext.runtime`/`inputs` and `StepResult.output`, `control`, and `diagnostics`; `variables` and `StepResult.data` are removed. See [the offline example](example/public/runtime-results.yaml).
 
@@ -180,15 +180,14 @@ Each wait must choose exactly one mode: `condition`, `delay`, `selector`, `url`,
 
 ```yaml
 - type: poll
-  until: {in: ["{{results.task.status}}", [ready, failed]]}
+  until: {in: ["{{results.task.body.status}}", [ready, failed]]}
   timeout: 30000
   interval: 1000
   max_attempts: 20
   save_as: polling
   steps:
-    - type: evaluate
-      args: {id: "{{results.submitted.id}}"}
-      script: "async ({id}) => { const r = await fetch('/tasks/' + id); if (!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); }"
+    - type: request
+      url: "/api/tasks/{{results.submitted.body.id}}"
       save_as: task
       retry: 2
       retry_delay: 250
@@ -199,6 +198,30 @@ Each wait must choose exactly one mode: `condition`, `delay`, `selector`, `url`,
 Declare retries on individual queries; poll rejects parent retry parameters. A terminal business failure can satisfy until and is handled by later branches. Optional `save_as` stores `{attempts, elapsed_ms, results}`, with the latest successful bindings produced by the body. Failures retain those results, condition, timing, phase and nested path under `failed_step.diagnostics.polls`. `on_error: continue` runs later steps but still reports a failed flow.
 
 Keep submissions before poll. At timeout, no new steps or retries start and late results are discarded; already-issued browser operations may finish and their errors are consumed. Polling does not undo side effects. See [the offline polling example](example/public/bounded-step-polling.yaml).
+
+### Browser Session HTTP Requests
+
+```yaml
+- type: request
+  url: /api/tasks
+  method: POST
+  headers: {Authorization: "Bearer {{token}}"}
+  json: {record_id: "{{record.id}}", enabled: false, metadata: null}
+  expected_status: 201
+  save_as: submitted
+- type: request
+  url: "/api/tasks/{{results.submitted.body.id}}"
+  query: {details: true}
+  save_as: task
+```
+
+`request` uses the current BrowserContext's API request client, sharing browser cookies and response Cookie updates. Relative URLs resolve against the current HTTP(S) page URL (not its HTML base tag); absolute HTTP(S) URLs also work on about:blank. These requests bypass page fetch, CORS, page route handlers and Service Workers. Playwright follows redirects; status checks and output refer to the final response. Extra authorization/CSRF headers must be supplied explicitly; localStorage tokens are not copied.
+
+Defaults are `method: GET`, `timeout: 30000`ms, `response: json`, and any 2xx status. Methods are uppercase GET/HEAD/POST/PUT/PATCH/DELETE/OPTIONS. `query` maps non-empty string keys to strings, finite numbers or booleans (encoded as lowercase true/false); `headers` maps non-empty string keys to strings. Whole-object and nested typed references are supported and checked after resolution. `json` accepts any JSON value, including explicit null; omitting it sends no body. GET/HEAD reject json. Content-Type defaults to application/json for JSON bodies unless supplied explicitly.
+
+Output is always `{url, status, headers, body}`. Read JSON fields with `{{results.task.body.status}}`; choose `response: text` for text or empty responses (including HEAD/204). Invalid or empty JSON fails without fallback. Optional `expected_status` is one HTTP status integer or a non-empty list (100-599); status is checked before parsing. HTTP success is separate from business success.
+
+Request timeout covers network and response reading, and is tightened to the remaining poll budget. In-flight protocol calls may finish after timeout; late responses are released, late errors consumed and late output discarded. Responses are released after reading without disposing the shared client. Failures use `RequestNetworkError`, `RequestTimeoutError`, `RequestStatusError` and `RequestResponseError`. There are no implicit retries; explicit `retry` uses the existing single-step policy, with optional `retry_on` class-name filters. Write retries require caller-controlled idempotency. See [the local session HTTP example](example/public/session-http-request.yaml) and its [server setup](example/README.md#browser-session-http-requests).
 
 ### Collection Iteration
 
@@ -259,6 +282,7 @@ steps:
 | `poll` | `until`, `steps` | Refresh results within a shared deadline |
 | `foreach` | `items`, `steps`, optional `as` / `index_as` | Traverse an array with local item and index bindings |
 | `evaluate` | `script`, optional `args` and `save_as` | Run a browser function and pass JSON data |
+| `request` | `url`, optional method/query/headers/json/response | Share browser cookies and bind HTTP responses |
 | `scroll`, `set-viewport` | step-specific parameters | Adjust scroll position or viewport |
 
 List the available steps or inspect any step's exact parameters before writing a flow:

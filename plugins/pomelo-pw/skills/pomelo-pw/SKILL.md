@@ -68,7 +68,7 @@ Pass data into browser functions through `args`; script source is literal:
 
 `${ }` is reserved for host languages such as JavaScript and is not processed as flow variable syntax.
 
-`save_as` binds successful public JSON output (currently supported by evaluate and poll); read it with `{{results.response}}`. Results are shared by nested steps and isolated between data rows. Child parameters resolve at execution; child local variables do not leak into siblings. Input definitions may reference other inputs; cycles fail. Results stay opaque, even if strings contain template syntax. Rebinding replaces a result; a failed write clears the old binding, while its arguments may read the previous snapshot.
+`save_as` binds successful public JSON output (currently supported by evaluate, request and poll); read it with `{{results.response}}`. Results are shared by nested steps and isolated between data rows. Child parameters resolve at execution; child local variables do not leak into siblings. Input definitions may reference other inputs; cycles fail. Results stay opaque, even if strings contain template syntax. Rebinding replaces a result; a failed write clears the old binding, while its arguments may read the previous snapshot.
 
 `evaluate.script` must be a synchronous or async function expression and explicitly return JSON data; use `return null` for no data. Omitted args passes no arguments; explicit null passes one null. Unsupported values, nonfinite numbers, and circular data fail. Migrate bare module bodies to functions and source interpolation to args; no compatibility adapters are provided.
 
@@ -99,6 +99,7 @@ Screenshots save to `./<flow-name>/` by default (derived from filename).
 | `select` | `selector`, one of `value` / `label` / `index` | Select dropdown option |
 | `check` / `uncheck` | `selector` | Toggle checkbox |
 | `evaluate` | `script`, optional `args`, `save_as` | Execute a browser function with JSON input/output |
+| `request` | `url`, optional method/query/headers/json/response | Share browser cookies and return HTTP response data |
 | `set-viewport` | `width`, `height` | Set viewport size |
 | `save-state` | `file` | Save cookies + localStorage |
 | `load-state` | `file` | Restore saved auth state |
@@ -282,15 +283,14 @@ While checks its condition again after the last allowed iteration: false complet
 
 ```yaml
 - type: poll
-  until: {in: ["{{results.task.status}}", [ready, failed]]}
+  until: {in: ["{{results.task.body.status}}", [ready, failed]]}
   timeout: 30000
   interval: 1000
   max_attempts: 20
   save_as: polling
   steps:
-    - type: evaluate
-      args: {id: "{{results.submitted.id}}"}
-      script: "async ({id}) => { const r = await fetch('/tasks/' + id); if (!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); }"
+    - type: request
+      url: "/api/tasks/{{results.submitted.body.id}}"
       save_as: task
       retry: 2
       retry_delay: 250
@@ -299,6 +299,24 @@ While checks its condition again after the last allowed iteration: false complet
 The non-empty body runs immediately, then until reads fresh results. False waits interval after the round. Timeout (default 30000ms) includes body, condition, retries and delays; interval defaults to 1000ms. Both are finite positive numbers; optional max_attempts is a positive integer. All bounds support complete typed references. Nested polls cannot extend the parent's deadline. Exhaustion fails; a true condition on the final round succeeds. Keep writes before poll and declare read retries on children; poll rejects parent retry parameters.
 
 Successful output is `{attempts, elapsed_ms, results}` with the body's latest successful bindings. Terminal business failures may satisfy until; handle outcomes in later branches. Failure details live in failed_step.diagnostics.polls, including nested paths and prior successful values even after a failed rebind. At timeout no new operations start and late results are discarded; in-flight browser operations may finish, with late errors consumed. on_error=continue still reports an unsuccessful flow if any step failed.
+
+### request - Browser Session HTTP
+
+```yaml
+- type: request
+  url: /api/tasks
+  method: POST
+  headers: {Authorization: "Bearer {{token}}"}
+  json: {id: "{{record.id}}", enabled: false, metadata: null}
+  expected_status: 201
+  save_as: submitted
+```
+
+Prefer request for HTTP queries instead of generic fetch scripts. It shares the current BrowserContext Cookie storage, including response updates. Relative URLs use the current HTTP(S) page URL, not HTML base; absolute HTTP(S) URLs also work on about:blank. It bypasses page fetch, CORS, route handlers and Service Workers. Extra authentication headers are explicit; localStorage tokens are not copied. Redirects follow Playwright behavior, and checks apply to the final response.
+
+Defaults are GET, 30000ms, response: json and any 2xx status. Uppercase methods: GET/HEAD/POST/PUT/PATCH/DELETE/OPTIONS. query values are strings, finite numbers or booleans (encoded as lowercase true/false); headers values are strings. Both use non-empty string keys, and objects and nested fields accept typed references. json may be any JSON value, including null, and is forbidden with GET/HEAD; absent json sends no body. JSON Content-Type defaults to application/json unless supplied explicitly. expected_status accepts an integer or a non-empty integer list (100-599).
+
+Output is `{url, status, headers, body}`; use `{{results.task.body.status}}`. response: text reads text or empty responses; JSON errors never fall back to text. HTTP success does not imply business success. The finite request timeout also covers response reading and is clamped by poll's remaining budget. In-flight calls may finish after timeout; late responses are released, errors consumed and output discarded. There are no implicit retries; explicit retry may repeat writes, so callers own idempotency. retry_on filters RequestNetworkError/RequestTimeoutError/RequestStatusError/RequestResponseError. API responses are released without disposing the shared client. See the local fixture setup in example/README.md.
 
 ### Step-Level Retry
 
