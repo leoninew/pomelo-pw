@@ -1,5 +1,5 @@
 # P0/P1 流程能力任务系列
-最后修改时间: 2026-10-02 10:26:51
+最后修改时间: 2026-10-02 11:31:14
 
 ## Review status
 
@@ -7,9 +7,9 @@ Accepted
 
 ## Flow mode and stage
 
-标准模式 / standard，系列意图 / Intent 已接受；T01-T05 已交付，T03/T04/T05 分别提交为 a02b2f3、4d98eac、cc6cc24，Verification 已接受。T06 浏览器会话 HTTP 请求 Implementation 已交付，Intent/Plan 已接受，当前停止供用户自行测试，未进入正式 Verification 或 T07。
+标准模式 / standard，系列意图 / Intent 已接受；T01-T05 已交付，T03/T04/T05 分别提交为 a02b2f3、4d98eac、cc6cc24，Verification 已接受。T06 浏览器会话 HTTP 请求 Implementation 已交付并提交为 89eb7ef，未创建正式 Verification。T07 DOM 集合与字段提取 Intent/Plan 已接受，Implementation 已交付且用户自行试跑通过；Verification 技术检查通过，文档 Draft 待用户审阅，当前停在 T07。
 
-本系列按独立任务推进 Intent -> Plan -> Implementation -> Verification。系列拆分、T01 各审查阶段及 T02-T06 Intent/Plan 已接受；T07-T09 仍处于 Intent 草稿。各任务进入下一阶段时，在对应阶段目录使用相同文件名；系列入口的接受不自动表示所有任务的 Plan 或实现已经接受。
+本系列按独立任务推进 Intent -> Plan -> Implementation -> Verification。系列拆分、T01 各审查阶段及 T02-T07 Intent/Plan 已接受；T08-T09 仍处于 Intent 草稿。各任务进入下一阶段时，在对应阶段目录使用相同文件名；系列入口的接受不自动表示所有任务的 Plan 或实现已经接受。
 
 ## Background
 
@@ -87,7 +87,7 @@ Pomelo PW 已提供导航、交互、等待、条件、循环和 evaluate，但�
 ## Decisions
 
 - 所有任务采用用户指定的标准模式，不因任务较小改用轻量模式。
-- 只使用 Draft / Accepted 作为阶段审查状态；当前为 T01/T03/T04/T05 Verification Accepted、T02-T06 Intent/Plan Accepted，T07-T09 Intent 为 Draft。
+- 只使用 Draft / Accepted 作为阶段审查状态；当前为 T01/T03/T04/T05 Verification Accepted、T02-T07 Intent/Plan Accepted，T08-T09 Intent 为 Draft。
 - 采用现有 Playwright 能力处理浏览器等待、DOM 定位和请求；不自建通用 JS/Python 表达式引擎。
 - 嵌套校验、参数解析时机和重试边界归入相关基础任务，不另立无关的全项目重构任务。
 - 用户明确“不做兼容适配”。各任务以新契约正确性为目标；必要的旧接口移除和仓库内调用迁移纳入对应任务，外部调用方迁移另行处理。
@@ -122,3 +122,6 @@ Pomelo PW 已提供导航、交互、等待、条件、循环和 evaluate，但�
 - T05 的 120 项相关回归、离线 polling 示例、两个真实 CLI 失败场景及两个真实浏览器异步超时场景通过；7 个变更 Python 文件静态检查及 v4 静态校验通过。未发现产品代码缺陷，未执行全量测试或真实材料业务；[T05 Verification](../verification/20260930-bounded-step-polling.md) 为 Draft，当前停止待用户审阅。
 - 用户自行提交 T05 为 cc6cc24，随后要求继续下一任务；T05 Verification 据此 Accepted。沿用“没有未决事项就开始实现”，接受 [T06 Intent](20260930-session-http-request.md)/[T06 Plan](../plan/20260930-session-http-request.md)，进入浏览器会话 HTTP 请求 Implementation，达到可用状态后停止供用户测试。
 - T06 新增 request，复用 Cookie、类型化参数、JSON/文本响应和 poll 预算；两个相关测试文件最终 58 项通过，4 个 Python 文件静态检查、新 YAML 校验、本地 Chrome 会话请求示例及真实 HTTP 超时检查通过。交付记录见 T06 Plan，当前停在 Implementation，没有创建 Verification 或执行 Git 写操作。
+- 用户要求提交并推进下一步，按当前暂存区完成 T06 提交 89eb7ef，不纳入忽略的 dist/material-parse-all-v6.yaml。沿用无未决事项时开始实现的授权，接受 T07 Intent/Plan 并完成 extract 实现。
+- T07 的 76 项针对性回归、3 个 Python 文件静态检查、新 YAML 校验与本机 Chrome 离线提取示例通过；补充真实浏览器读取边界检查，修复 Playwright 参数过滤导致嵌套 null 默认值丢失的问题。交付见 [T07 Plan](../plan/20260930-dom-data-extraction.md)，当前停止供用户测试，不创建正式 Verification、不提交 T07、不自动推进 T08。
+- 用户自行试跑反馈“All steps completed successfully”，随后要求先完成本任务验证。T07 的 95 项相关回归、5 个 Python 文件静态检查和离线 CLI 正常/失败场景通过；验证发现的 CLI 文本摘要 Unknown error 问题已修复并回归，JSON 结果与退出码不变。[T07 Verification](../verification/20260930-dom-data-extraction.md) 技术结论通过，文档 Draft 待用户审阅，不提交或推进 T08。

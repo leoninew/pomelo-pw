@@ -1,0 +1,120 @@
+name: dom-data-extraction
+description: Offline DOM snapshots, explicit missing fields and extracted collection iteration.
+headless: false
+output_dir: output/dom-data-extraction
+steps:
+  - type: evaluate
+    print_result: false
+    script: |
+      () => {
+        document.head.innerHTML = '<base href="https://example.invalid/materials/">';
+        document.body.innerHTML = `
+          <main style="font:16px Arial;padding:24px;max-width:720px">
+            <h1>DOM extraction</h1>
+            <table style="border-collapse:collapse;width:100%" border="1" cellpadding="12">
+              <thead><tr><th>Material</th><th>File</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr id="a" data-id="a" data-note="">
+                  <td class="name">  Alpha  handbook  </td>
+                  <td><a href="./a.pdf">a.pdf</a></td><td class="status">ready</td>
+                </tr>
+                <tr id="b" data-id="b" data-note="">
+                  <td class="name">Beta workbook</td>
+                  <td><a href="../b.docx">b.docx</a></td><td>pending</td>
+                </tr>
+              </tbody>
+            </table>
+            <p id="controls"><label>Page size <input id="page-size" value="10"></label></p>
+            <p id="progress"></p><pre id="summary"></pre>
+          </main>`;
+        document.querySelector('#page-size').value = '25';
+        return null;
+      }
+  - type: wait
+    condition: {all: [{page: {element_visible: 'table tbody tr'}}, {page: {text_contains: Beta workbook}}]}
+    timeout: 1000
+  - type: extract
+    selector: css=h1
+    save_as: title
+  - type: extract
+    selector: table tbody tr
+    mode: all
+    fields:
+      id: {read: attribute, attribute: data-id}
+      name: {selector: ':scope > td.name'}
+      raw_href: {selector: a, read: attribute, attribute: href}
+      url: {selector: a, read: url, attribute: href}
+      status: {selector: .status, required: false, default: pending}
+      note: {selector: .note, required: false}
+      count: {selector: .count, required: false, default: 0}
+      enabled: {selector: .enabled, required: false, default: false}
+      empty: {read: attribute, attribute: data-note}
+    save_as: records
+  - type: extract
+    selector: '#page-size'
+    read: value
+    save_as: page_size
+  - type: extract
+    selector: '#a .name'
+    trim: false
+    save_as: raw_name
+  - type: extract
+    selector: .absent
+    mode: all
+    save_as: empty
+  - type: extract
+    selector: .absent
+    required: false
+    default: {enabled: false, count: 0, note: null}
+    save_as: fallback
+  - type: foreach
+    items: '{{results.records}}'
+    as: record
+    steps:
+      - type: if
+        condition: {eq: ['{{record.status}}', ready]}
+        then:
+          - type: extract
+            selector: '#{{record.id}} .name'
+            save_as: selected
+          - type: evaluate
+            args: '{{results.selected}}'
+            print_result: false
+            script: |
+              name => {
+                document.querySelector('#progress').textContent = name;
+                return null;
+              }
+  - type: evaluate
+    args:
+      title: '{{results.title}}'
+      records: '{{results.records}}'
+      page_size: '{{results.page_size}}'
+      raw_name: '{{results.raw_name}}'
+      empty: '{{results.empty}}'
+      fallback: '{{results.fallback}}'
+      selected: '{{results.selected}}'
+    save_as: summary
+    script: |
+      ({title, records, page_size, raw_name, empty, fallback, selected}) => {
+        const [a, b] = records;
+        if (title !== 'DOM extraction' || records.length !== 2 || a.id !== 'a' || b.id !== 'b' ||
+            a.name !== 'Alpha  handbook' || b.name !== 'Beta workbook' || page_size !== '25' ||
+            raw_name !== '  Alpha  handbook  ' || selected !== a.name) {
+          throw new Error('DOM order, text, live value or nested extraction failed');
+        }
+        if (a.raw_href !== './a.pdf' || a.url !== 'https://example.invalid/materials/a.pdf' ||
+            b.raw_href !== '../b.docx' || b.url !== 'https://example.invalid/b.docx') {
+          throw new Error('Raw attributes and absolute URLs were confused');
+        }
+        if (b.status !== 'pending' || a.note !== null || a.count !== 0 || a.enabled !== false ||
+            a.empty !== '' || empty.length !== 0 || fallback.enabled !== false ||
+            fallback.count !== 0 || fallback.note !== null) {
+          throw new Error('Explicit missing or empty value rules failed');
+        }
+        const summary = {records: records.length, page_size, selected, urls: records.map(row => row.url)};
+        document.querySelector('#summary').textContent = JSON.stringify(summary, null, 2);
+        return summary;
+      }
+  - type: screenshot
+    file: extracted.png

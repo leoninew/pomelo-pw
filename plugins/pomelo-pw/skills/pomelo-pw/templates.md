@@ -343,6 +343,37 @@ Submit before this step. The first query is immediate; timeout includes child re
 
 Navigate or sign in first for relative URLs and browser cookies. Response content is under body; status and headers remain separate. Extra authentication headers are explicit. Use response: text for non-JSON or empty responses, and keep submissions outside poll. Retry is opt-in and may replay writes; read retries can filter RequestNetworkError and RequestTimeoutError.
 
+### DOM Records and Form Values
+
+```yaml
+- type: wait
+  condition: {page: {element_visible: 'table tbody tr'}}
+  timeout: 5000
+- type: extract
+  selector: table tbody tr
+  mode: all
+  fields:
+    id: {read: attribute, attribute: data-id}
+    name: {selector: .name}
+    raw_href: {selector: a, read: attribute, attribute: href}
+    url: {selector: a, read: url, attribute: href}
+    status: {selector: .status, required: false, default: unknown}
+  save_as: records
+- type: extract
+  selector: '#page-size'
+  read: value
+  save_as: page_size
+- type: foreach
+  items: '{{results.records}}'
+  as: record
+  steps:
+    - type: evaluate
+      args: '{{record}}'
+      script: 'record => record'
+```
+
+Extraction is immediate. Root selectors use Playwright; fields use row-relative CSS, with no frame/Shadow DOM traversal. one rejects multiple roots; all may be empty. Missing fields fail unless required: false (null or explicit JSON default). Field ambiguity always fails. Text trims outer whitespace only; form values stay strings. Attribute mode preserves raw href; URL mode resolves against the element's baseURI, including HTML base.
+
 ## Data-Driven Testing
 
 ### 11. Multi-User Test

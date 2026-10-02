@@ -130,7 +130,7 @@ steps:
 
 `evaluate.script` 必须是同步或 async 函数表达式，源码保持原文。通过 `args` 传递单个 JSON 载荷；未提供 args 时不传参数，`args: null` 则传入一个 null 参数。函数必须明确返回 JSON 值，不需要数据时可 `return null`；不支持的类型、非有限数字和循环数据会报错。
 
-只有产生公开输出的步骤支持 `save_as`，当前为 `evaluate`、`request` 和 `poll`。成功后保存结果快照，再次成功写入会覆盖。替换时参数可以读取上一次值，但失败会使该绑定失效。嵌套步骤共享结果，data 行之间隔离。子步骤执行时才解析参数，子步骤局部变量不会泄漏给兄弟步骤。结果字符串始终作为数据，不重新解释为模板。`output_dir` 在运行前解析，只能读取输入。
+只有产生公开输出的步骤支持 `save_as`，当前为 `evaluate`、`extract`、`request` 和 `poll`。成功后保存结果快照，再次成功写入会覆盖。替换时参数可以读取上一次值，但失败会使该绑定失效。嵌套步骤共享结果，data 行之间隔离。子步骤执行时才解析参数，子步骤局部变量不会泄漏给兄弟步骤。结果字符串始终作为数据，不重新解释为模板。`output_dir` 在运行前解析，只能读取输入。
 
 这是不提供兼容适配的接口变更：裸模块代码改为函数，源码中的输入插值改为 `args`；完整引用不再强制转成字符串。Python 步骤实现改用 `StepContext.runtime`/`inputs` 和 `StepResult.output`、`control`、`diagnostics`，移除原 `variables` 和 `StepResult.data`。可直接运行[离线示例](example/public/runtime-results.yaml)。
 
@@ -223,6 +223,31 @@ steps:
 
 请求超时覆盖网络及响应读取，并按 poll 剩余预算收紧。在途协议调用可能在超时后完成；迟到响应被释放、异常被消费、输出被丢弃。读取后释放响应缓存，不销毁共享客户端。失败分别为 RequestNetworkError、RequestTimeoutError、RequestStatusError 和 RequestResponseError。不默认重试；显式 retry 使用现有单步骤策略，可用 retry_on 按错误类名筛选。写请求的幂等性由调用方负责。可运行[本地会话请求示例](example/public/session-http-request.yaml)，服务启动方式见[示例说明](example/README.md#browser-session-http-requests)。
 
+### DOM 数据提取
+
+```yaml
+- type: extract
+  selector: table tbody tr
+  mode: all
+  fields:
+    id: {read: attribute, attribute: data-id}
+    name: {selector: .name}
+    raw_href: {selector: a, read: attribute, attribute: href}
+    url: {selector: a, read: url, attribute: href}
+    status: {selector: .status, required: false, default: unknown}
+  save_as: records
+- type: extract
+  selector: '#page-size'
+  read: value
+  save_as: page_size
+```
+
+`extract` 在单次同步 DOM 快照中读取，不等待或修改页面；先用 wait 声明就绪条件。根 selector 使用 Playwright，字段 selector 为相对于该行的 CSS，支持 `:scope`，不跨 iframe 或穿透 Shadow DOM。省略字段 selector 则读取该行自身。字段名为 ASCII 标识符；fields 对象与配置值支持类型化引用，执行时再次校验。
+
+默认 `mode: one` 返回单值或字段对象，多个根匹配失败；`mode: all` 按 DOM 顺序返回数组，无匹配返回 `[]`。未配置 fields 时直接读取根元素。默认 `read: text` 使用 textContent，包含隐藏文本；默认 `trim: true` 只去掉首尾空白，内部空白保留，false 保留原文。`read: attribute` 必须配置 attribute，返回原始属性；`read: url` 也必须配置 attribute，按元素 baseURI（包含 HTML base）解析绝对 URL。`read: value` 返回 input/textarea/select 当前字符串值，不转数字或复选框布尔状态；其他元素失败。fields 不与同层 read/attribute/trim 混用，trim 只用于 text。
+
+单根、字段元素或属性缺失默认失败；显式 `required: false` 返回 null，也可配置任意 JSON default（只允许与 required: false 同用）。空串是有效值，false/0/null 默认值保持原类型。字段多匹配始终失败，错误包含行序号和字段位置；根 required/default 不覆盖字段自己的设置，空 all 集合仍为 []。结果可直接供 foreach、条件和 poll 使用；仅显式重试，poll 超时丢弃迟到快照。可运行[离线提取示例](example/public/dom-data-extraction.yaml)。
+
 ### 集合遍历
 
 ```yaml
@@ -283,6 +308,7 @@ steps:
 | `foreach` | `items`、`steps`，可选 `as` / `index_as` | 遍历数组，提供局部元素和索引绑定 |
 | `evaluate` | `script`，可选 `args` 和 `save_as` | 执行页面函数并传递 JSON 数据 |
 | `request` | `url`，可选 method/query/headers/json/response | 共享浏览器 Cookie 并绑定 HTTP 响应 |
+| `extract` | `selector`，可选 mode/read/fields | 读取 DOM 值或映射记录数组 |
 | `scroll`、`set-viewport` | 各步骤参数 | 调整滚动位置或视口 |
 
 在编写 flow 前，先列出可用步骤或查看某一步骤的精确参数：

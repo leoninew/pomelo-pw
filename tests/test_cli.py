@@ -139,6 +139,40 @@ class TestRunCommand:
         assert json.loads(result.stdout) == {"success": False, "error": "Invalid wait condition"}
         assert result.stderr == ""
 
+    @pytest.mark.parametrize(
+        ("payload", "expected"),
+        [
+            ({"success": False, "error": "Invalid flow"}, "Invalid flow"),
+            (
+                {"success": False, "failed_step": {"error": "extract rows[0].fields.name: element is missing"}},
+                "extract rows[0].fields.name: element is missing",
+            ),
+            (
+                {
+                    "success": False,
+                    "data_driven": True,
+                    "row_results": [
+                        {"success": True, "row": "first"},
+                        {"success": False, "row": "second", "failed_step": {"error": "Missing field"}},
+                    ],
+                },
+                "Row second: Missing field",
+            ),
+        ],
+        ids=["flow-error", "failed-step", "data-row"],
+    )
+    def test_run_text_failure_preserves_original_reason(self, payload: dict[str, Any], expected: str) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            Path("sample.yaml").write_text("steps: []\n", encoding="utf-8")
+            with patch("pomelo_pw.cli.FlowExecutor") as executor_class:
+                executor_class.return_value.run_flow = AsyncMock(return_value=payload)
+                result = runner.invoke(cli, ["run", "sample.yaml"])
+
+        assert result.exit_code == 1
+        assert result.stderr == f"Failed: {expected}\n"
+        assert result.stdout == ""
+
     def test_run_reports_data_driven_summary(self) -> None:
         runner = CliRunner()
         with runner.isolated_filesystem():

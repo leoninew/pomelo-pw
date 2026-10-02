@@ -86,7 +86,13 @@ def run(
             msg = f"Completed: {completed}, {len(result['screenshots'])} screenshots"
             click.echo(msg)
         else:
-            click.echo(f"Failed: {result.get('error', 'Unknown error')}", err=True)
+            error = result.get("error") or result.get("failed_step", {}).get("error")
+            if not error and result.get("data_driven"):
+                failed_row: dict[str, Any] = next((row for row in result["row_results"] if not row["success"]), {})
+                row_error = failed_row.get("error") or failed_row.get("failed_step", {}).get("error")
+                if row_error:
+                    error = f"Row {failed_row['row']}: {row_error}"
+            click.echo(f"Failed: {error or 'Unknown error'}", err=True)
 
     if not result.get("success"):
         sys.exit(1)

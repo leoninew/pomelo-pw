@@ -1,13 +1,13 @@
 # T07 DOM 集合与字段提取
-最后修改时间: 2026-09-30 12:50:26
+最后修改时间: 2026-10-02 11:31:14
 
 ## Review status
 
-Draft
+Accepted
 
 ## Task metadata
 
-- 流程：标准模式 / standard，意图阶段 / Intent。
+- 流程：标准模式 / standard，Intent/Plan 已接受，Implementation 已交付并经用户自行试跑通过；Verification 检查完成且技术结论通过，文档 Draft 待用户审阅。
 - 优先级：P1；依赖：[T01](20260930-runtime-result-context.md)；工作量：2-3 人日。
 - 系列入口：[P0/P1 流程能力任务系列](20260930-p0-p1-flow-capabilities.md)。
 
@@ -58,4 +58,8 @@ material-parse-all 使用 querySelectorAll、行内查找和 textContent 组装�
 
 ## User review notes
 
-依据用户对 P0/P1 的任务拆分要求创建，等待意图审阅。
+- 用户要求提交当前任务并推进下一步，T06 已提交为 89eb7ef。沿用“没有未决事项就开始实现”，接受本项 Intent/Plan，开始实现。
+- 第一版根选择器使用 Playwright Locator，字段为行内 CSS；同步快照读取，不自动等待、不添加转换语言或兼容适配。达到可用状态后停止供用户自行测试。
+- 实现与开发检查完成，交付记录见 [T07 Plan](../plan/20260930-dom-data-extraction.md)。没有必须修复的遗留事项，不自动进入 T08。
+- 用户反馈“All steps completed successfully”并明确要求完成本任务验证，进入 Verification；继续限定针对性回归和最小集成，完成后停在 T07。
+- 本轮 95 项相关回归、5 个 Python 文件静态检查、离线正常与失败 CLI 场景通过，修复文本摘要丢失具体失败原因的问题。证据与范围见 [T07 Verification](../verification/20260930-dom-data-extraction.md)，不自动推进 T08。

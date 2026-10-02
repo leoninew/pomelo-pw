@@ -33,6 +33,7 @@ pomelo-pw run example/public/data-driven-pages.yaml --var base_url=https://stagi
 | `public/page-condition-wait.yaml` | Combined SPA readiness, native JS waits, structured args | Yes, offline |
 | `public/bounded-step-polling.yaml` | Serial query rounds, fresh results, terminal outcomes and budgets | Yes, offline |
 | `public/session-http-request.yaml` | Browser Cookie sharing, typed HTTP payloads, query polling and text output | Start the local fixture below |
+| `public/dom-data-extraction.yaml` | DOM snapshots, field mapping, raw/absolute URLs, live values and foreach | Yes, offline |
 | `public/visual-regression.yaml` | Screenshot baseline comparison | Yes, with Pillow |
 
 ## Runtime Results
@@ -100,6 +101,16 @@ uv run --locked --no-sync pomelo-pw run example/public/session-http-request.yaml
 If the port is occupied, choose a different `--port` and pass the matching `--base-url http://127.0.0.1:PORT` to the flow. Stop the fixture with Ctrl+C afterward. The flow signs in through the page, sends typed query/header/JSON values, checks response Cookie updates, polls a task to ready on the second query, reads a text response and writes `session.png`.
 
 Request defaults to GET/JSON/2xx with a finite 30000ms timeout. Relative URLs need a current HTTP(S) page. Read content through `results.NAME.body`; expected HTTP errors can be listed explicitly with expected_status. Empty or text responses require response: text. Only explicit retry replays a request; keep submissions outside poll and choose read retry_on filters when needed.
+
+## DOM Data Extraction
+
+`public/dom-data-extraction.yaml` creates an offline table on about:blank, waits for readiness, extracts two mapped records, and consumes the ready record through foreach/if and a nested extraction. It checks DOM order, text whitespace, raw attributes versus absolute URLs, live input values, optional null/false/0 defaults, empty strings and an empty collection, then writes `extracted.png`.
+
+```bash
+uv run --locked --no-sync pomelo-pw run example/public/dom-data-extraction.yaml --headless -v
+```
+
+Extract does not wait: use wait for page readiness first. Root selectors use Playwright, while field selectors use row-relative CSS (with :scope), without frame/Shadow DOM traversal. one is strict; all returns a possibly empty array. Missing required values and ambiguous field matches fail. Use required: false for null or an explicit JSON default; raw attributes, text and current form values remain strings. URL mode resolves against the element's baseURI.
 
 ## Browser Interactions
 

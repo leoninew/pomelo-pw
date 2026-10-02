@@ -68,7 +68,7 @@ Pass data into browser functions through `args`; script source is literal:
 
 `${ }` is reserved for host languages such as JavaScript and is not processed as flow variable syntax.
 
-`save_as` binds successful public JSON output (currently supported by evaluate, request and poll); read it with `{{results.response}}`. Results are shared by nested steps and isolated between data rows. Child parameters resolve at execution; child local variables do not leak into siblings. Input definitions may reference other inputs; cycles fail. Results stay opaque, even if strings contain template syntax. Rebinding replaces a result; a failed write clears the old binding, while its arguments may read the previous snapshot.
+`save_as` binds successful public JSON output (currently supported by evaluate, extract, request and poll); read it with `{{results.response}}`. Results are shared by nested steps and isolated between data rows. Child parameters resolve at execution; child local variables do not leak into siblings. Input definitions may reference other inputs; cycles fail. Results stay opaque, even if strings contain template syntax. Rebinding replaces a result; a failed write clears the old binding, while its arguments may read the previous snapshot.
 
 `evaluate.script` must be a synchronous or async function expression and explicitly return JSON data; use `return null` for no data. Omitted args passes no arguments; explicit null passes one null. Unsupported values, nonfinite numbers, and circular data fail. Migrate bare module bodies to functions and source interpolation to args; no compatibility adapters are provided.
 
@@ -100,6 +100,7 @@ Screenshots save to `./<flow-name>/` by default (derived from filename).
 | `check` / `uncheck` | `selector` | Toggle checkbox |
 | `evaluate` | `script`, optional `args`, `save_as` | Execute a browser function with JSON input/output |
 | `request` | `url`, optional method/query/headers/json/response | Share browser cookies and return HTTP response data |
+| `extract` | `selector`, optional mode/read/fields | Read a DOM value or mapped collection snapshot |
 | `set-viewport` | `width`, `height` | Set viewport size |
 | `save-state` | `file` | Save cookies + localStorage |
 | `load-state` | `file` | Restore saved auth state |
@@ -317,6 +318,26 @@ Prefer request for HTTP queries instead of generic fetch scripts. It shares the 
 Defaults are GET, 30000ms, response: json and any 2xx status. Uppercase methods: GET/HEAD/POST/PUT/PATCH/DELETE/OPTIONS. query values are strings, finite numbers or booleans (encoded as lowercase true/false); headers values are strings. Both use non-empty string keys, and objects and nested fields accept typed references. json may be any JSON value, including null, and is forbidden with GET/HEAD; absent json sends no body. JSON Content-Type defaults to application/json unless supplied explicitly. expected_status accepts an integer or a non-empty integer list (100-599).
 
 Output is `{url, status, headers, body}`; use `{{results.task.body.status}}`. response: text reads text or empty responses; JSON errors never fall back to text. HTTP success does not imply business success. The finite request timeout also covers response reading and is clamped by poll's remaining budget. In-flight calls may finish after timeout; late responses are released, errors consumed and output discarded. There are no implicit retries; explicit retry may repeat writes, so callers own idempotency. retry_on filters RequestNetworkError/RequestTimeoutError/RequestStatusError/RequestResponseError. API responses are released without disposing the shared client. See the local fixture setup in example/README.md.
+
+### extract - DOM Data Snapshot
+
+```yaml
+- type: extract
+  selector: table tbody tr
+  mode: all
+  fields:
+    id: {read: attribute, attribute: data-id}
+    name: {selector: .name}
+    url: {selector: a, read: url, attribute: href}
+    status: {selector: .status, required: false, default: unknown}
+  save_as: records
+```
+
+Use extract for common DOM reads. It takes one synchronous snapshot without waiting or mutating the page; declare readiness with wait first. Root selector uses Playwright; field selectors are row-relative CSS, with :scope and no frame/Shadow DOM traversal. Omit the field selector to read the row. Field names are ASCII identifiers. fields and configuration values accept typed references and are checked at execution.
+
+mode defaults to one (strict single root); all returns DOM-order values or mapped objects, including [] for no roots. Without fields, read roots directly. read defaults to textContent text with trim: true (outer whitespace only); false preserves text. attribute reads raw strings; url requires attribute and resolves against element.baseURI including HTML base. value reads current input/textarea/select strings, without numeric or checkbox-state conversion; other elements fail. fields cannot combine with root read/attribute/trim; trim only applies to text.
+
+Missing roots/fields/attributes fail by default. required: false returns null or an explicit JSON default (default requires false); empty strings are valid and false/0/null defaults are preserved. Root settings do not override fields. Multiple field matches always fail with row/field locations; empty all remains []. Output binds directly to foreach/conditions/poll; retries are explicit, poll discards late snapshots, and ExtractError preserves browser read errors. See example/public/dom-data-extraction.yaml. No legacy script adapters are provided.
 
 ### Step-Level Retry
 

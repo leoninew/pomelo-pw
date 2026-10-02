@@ -1,5 +1,5 @@
 # Pomelo PW - Flow-based UI Automation Tool
-最后修改时间: 2026-10-02 10:22:02
+最后修改时间: 2026-10-02 11:16:05
 
 ## 项目概述
 
@@ -160,7 +160,15 @@ while 在 max_iterations 后再检查一次条件，false 正常完成、true �
 
 asyncio.timeout_at 覆盖请求和响应读取，Playwright fetch 使用有限的原生 timeout；执行器现有逻辑按 poll 剩余预算收紧并阻止迟到结果发布。在途任务通过 shield 保留协议调用，强引用集合持有到完成，回调消费迟到异常；截止时间后不再解析迟到响应。APIResponse 在 finally 中释放，不销毁共享 APIRequestContext。错误分类为 RequestNetworkError/RequestTimeoutError/RequestStatusError/RequestResponseError，沿现有嵌套步骤定位和 CLI 失败出口传播；请求消息不主动输出头或 body。显式 retry 复用现有单步骤语义，默认没有请求重试；幂等性由调用方决定。
 
-### 8. 流程执行
+### 8. DOM 数据提取
+
+`extract` 以 `page.locator(selector).evaluate_all` 取得根集合，在单个同步回调内检查匹配数并映射所有字段，没有跨字段 await。根 selector 使用 Playwright，行内字段使用浏览器原生 querySelectorAll 的相对 CSS（可用 :scope），不跨 iframe/Shadow DOM。字段配置作为结构化参数传入，不拼接数据到源码；无自动等待、DOM 写操作、转换语言或兼容分支。
+
+one 默认严格单元素，all 按 DOM 顺序返回数组（可空）；无 fields 时返回读取值，有 fields 时返回 ASCII 字段名映射的对象。text 为 textContent，trim 仅去首尾；attribute 为原始属性，url 按 baseURI 解析，value 为 input/textarea/select 当前字符串。读取格式、属性、字段配置和 required/default 经静态及运行时校验；缺失默认失败，optional 返回明确 default 或 null，空串仍是值，多匹配始终失败。根的缺失配置不覆盖字段配置。
+
+参数对象在传输边界编码为 JSON 字符串，浏览器回调内解码，避免 Playwright 的参数过滤递归省略 None 键，保留显式 null 默认值。原生读取错误转为 ExtractError，保留行与字段位置，沿既有嵌套路径和失败证据传播。结果使用 T01 JSON 快照与 save_as 契约，默认没有重试；poll 复用执行器既有总预算和迟到结果丢弃逻辑。快照只覆盖当前提取，不保证后续步骤仍观察到同一页面，页面就绪和类型转换由调用方表达。
+
+### 9. 流程执行
 
 `FlowExecutor` 负责加载、校验、执行流程：
 
@@ -201,6 +209,7 @@ asyncio.timeout_at 覆盖请求和响应读取，Playwright fetch 使用有限�
 | `uncheck` | `selector` | 取消勾选 |
 | `evaluate` | `script` | 执行函数表达式，可用 args 传参、save_as 绑定 JSON 输出 |
 | `request` | `url` | 复用浏览器 Cookie，请求 JSON/文本并绑定 url/status/headers/body |
+| `extract` | `selector` | 同步读取文本、属性、URL、表单值或映射对象数组 |
 | `poll` | `until`, `steps` | 有界查询轮询，可用 save_as 绑定轮次、耗时和最近结果 |
 | `set-viewport` | - | 设置视口 |
 

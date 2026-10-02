@@ -130,7 +130,7 @@ steps:
 
 `evaluate.script` is a synchronous or async function expression, kept as literal source. Pass one JSON payload through `args`; omitted args calls the function with no arguments, while `args: null` passes one null argument. Return a JSON value explicitly (use `return null` when no data is needed). Unsupported values, nonfinite numbers, and circular data fail.
 
-Only output-producing steps support `save_as` (currently `evaluate`, `request` and `poll`). A successful step publishes a copied result; another successful write replaces it. During replacement, arguments can read the previous value, but a failed attempt leaves the binding absent. Results are shared by nested steps and isolated between data rows. Child parameters resolve when the child executes; child variables do not leak into siblings. Returned strings are data and are never reinterpreted as templates. `output_dir` resolves before execution and can only use inputs.
+Only output-producing steps support `save_as` (currently `evaluate`, `extract`, `request` and `poll`). A successful step publishes a copied result; another successful write replaces it. During replacement, arguments can read the previous value, but a failed attempt leaves the binding absent. Results are shared by nested steps and isolated between data rows. Child parameters resolve when the child executes; child variables do not leak into siblings. Returned strings are data and are never reinterpreted as templates. `output_dir` resolves before execution and can only use inputs.
 
 This is a breaking contract change with no compatibility adapters. Migrate bare module bodies to functions and source interpolation to `args`. Complete references no longer force values to strings. Python step implementations use `StepContext.runtime`/`inputs` and `StepResult.output`, `control`, and `diagnostics`; `variables` and `StepResult.data` are removed. See [the offline example](example/public/runtime-results.yaml).
 
@@ -223,6 +223,31 @@ Output is always `{url, status, headers, body}`. Read JSON fields with `{{result
 
 Request timeout covers network and response reading, and is tightened to the remaining poll budget. In-flight protocol calls may finish after timeout; late responses are released, late errors consumed and late output discarded. Responses are released after reading without disposing the shared client. Failures use `RequestNetworkError`, `RequestTimeoutError`, `RequestStatusError` and `RequestResponseError`. There are no implicit retries; explicit `retry` uses the existing single-step policy, with optional `retry_on` class-name filters. Write retries require caller-controlled idempotency. See [the local session HTTP example](example/public/session-http-request.yaml) and its [server setup](example/README.md#browser-session-http-requests).
 
+### DOM Data Extraction
+
+```yaml
+- type: extract
+  selector: table tbody tr
+  mode: all
+  fields:
+    id: {read: attribute, attribute: data-id}
+    name: {selector: .name}
+    raw_href: {selector: a, read: attribute, attribute: href}
+    url: {selector: a, read: url, attribute: href}
+    status: {selector: .status, required: false, default: unknown}
+  save_as: records
+- type: extract
+  selector: '#page-size'
+  read: value
+  save_as: page_size
+```
+
+`extract` takes one synchronous DOM snapshot without waiting or changing the page. Wait for readiness first. The root selector uses Playwright; each field selector is relative CSS, supports `:scope`, and stays within the row's DOM (no frame or Shadow DOM traversal). Omit a field selector to read the row itself. Field names are ASCII identifiers. Whole `fields` objects and configuration values accept typed references and are checked again at execution.
+
+`mode: one` (default) returns a scalar or mapped object and rejects multiple roots; `mode: all` returns an array in DOM order, including `[]` for no roots. Without fields, read each root directly. `read: text` (default) uses textContent, including hidden text; `trim: true` only removes outer whitespace, and `trim: false` preserves it. `read: attribute` requires attribute and returns its raw string; `read: url` also requires attribute and resolves it against the element's baseURI, including HTML base. `read: value` returns the current input/textarea/select string; it does not convert numbers or checkbox state. Other element types fail. Do not combine fields with root read/attribute/trim, or use trim outside text mode.
+
+Missing single roots, field elements or attributes fail by default. Use `required: false` for null, or add a JSON default (only allowed with required: false). Empty strings are valid values; false/0/null defaults are preserved. Multiple field matches always fail, with row and field locations. Root required/default never override mapped field settings; an empty all collection stays empty. Results bind directly for foreach/conditions/poll; retries are explicit and poll discards late snapshots. See [the offline extraction example](example/public/dom-data-extraction.yaml).
+
 ### Collection Iteration
 
 ```yaml
@@ -283,6 +308,7 @@ steps:
 | `foreach` | `items`, `steps`, optional `as` / `index_as` | Traverse an array with local item and index bindings |
 | `evaluate` | `script`, optional `args` and `save_as` | Run a browser function and pass JSON data |
 | `request` | `url`, optional method/query/headers/json/response | Share browser cookies and bind HTTP responses |
+| `extract` | `selector`, optional mode/read/fields | Read a DOM value or array of mapped records |
 | `scroll`, `set-viewport` | step-specific parameters | Adjust scroll position or viewport |
 
 List the available steps or inspect any step's exact parameters before writing a flow:
