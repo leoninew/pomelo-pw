@@ -148,7 +148,7 @@ result = asyncio.run(main())
 
 普通步骤可设置 `retry`、`retry_delay`（毫秒）和 `retry_on`（错误类名列表）。重试只重复当前步骤；控制体中的子步骤不会使已完成的分支或迭代整体重放。`poll` 的重试应声明在子查询上，提交操作放在轮询前；写操作重试需要调用方保证幂等性。
 
-顶层 `data` 数组让同一个流程按行独立执行；行字段覆盖流程变量，可用 `_label` 命名输出子目录。`on_error: stop` 为默认值，`continue` 可继续后续顶层步骤或数据行，但任何执行错误仍使最终报告失败。完整示例见 [Agent skill](../plugins/pomelo-pw/skills/pomelo-pw/SKILL.md#data-driven-testing)。
+顶层 `data` 数组让同一个流程按行独立执行；行字段覆盖流程变量，可用 `_label` 命名输出子目录。`on_error: stop` 为默认值，`continue` 可继续后续顶层步骤或数据行，但任何执行错误仍使最终报告失败。完整示例见 [Agent skill](../plugins/pomelo-pw/skills/pomelo-pw/references/reporting.md#data-driven-testing)。
 
 ## 截图基线对比
 

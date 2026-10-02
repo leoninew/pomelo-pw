@@ -1,447 +1,81 @@
 ---
 name: pomelo-pw
-description: Run browser automation flows using Pomelo PW through the pomelo-pw CLI.
+description: 通过 Pomelo PW CLI 或 Python 包编写、校验和运行 YAML 浏览器流程，支持登录状态复用与结构化执行报告。
 ---
 
-# Pomelo PW Skill
+# Pomelo PW
 
-Run browser automation flows using Pomelo PW.
+使用 Pomelo PW 在用户项目中编写和运行 YAML 流程。随包提供的参考文档和模板描述当前接口约定；只读取本次任务需要的内容。
 
-## Commands
+## 按需阅读
 
-### Interactive Tools
+| 任务 | 参考文档 |
+| --- | --- |
+| 变量、evaluate、条件、等待、循环、foreach 或轮询 | [运行时与控制流程](references/runtime-and-control.md) |
+| 浏览器操作、登录状态、HTTP 请求、DOM 提取或截图 | [浏览器与 HTTP 步骤](references/browser-and-http.md) |
+| 断言、收集与导出、JSON 报告或数据驱动执行 | [报告与数据驱动执行](references/reporting.md) |
+| 在其他 Python 项目中执行已有 YAML | [Python 包集成](references/python-api.md) |
+| 基于完整流程或操作片段开始编写 | [模板索引](templates.md) |
 
-- `pomelo-pw explore <url>` - Launch interactive page explorer
-  - Hover over elements to see selectors in real-time
-  - Click to display all selector options in terminal
-  - Selector priority: data-test > id > role > text > class > css > xpath
+这些文件包含在插件包内。仓库中的示例服务是可选的源码资源，使用已安装的 skill 不需要这些服务。
 
-- `pomelo-pw record <url> <output.yaml>` - Record interactions to generate flow
-  - Click elements → records click actions
-  - Type in inputs → records fill actions
-  - Press Enter → records key press
-  - Ctrl+C to stop and save
+## 执行已有流程
 
-### Flow Execution
+从用户指定的工作目录执行：相对输出目录以该工作目录为基准解析，而不是以 YAML 或插件所在目录为基准。
 
-- `pomelo-pw run <flow-file>` - Execute a flow
-- `pomelo-pw run <flow-file> -v` - Verbose output
-- `pomelo-pw run <flow-file> -o <dir>` - Override the flow output directory
-- `pomelo-pw run <flow-file> --var key=value` - Override variables
-- `pomelo-pw run <flow-file> --headless` - Headless mode
-- `pomelo-pw run <flow-file> --json` - One JSON report on stdout; execution logs on stderr
-- `pomelo-pw validate <flow-file>` - Validate without running
-- `pomelo-pw steps` - List all available steps
-- `pomelo-pw spec <step>` - Show step parameters
+已安装 CLI 时使用 `pomelo-pw`；调用方项目管理该依赖时使用 `uv run pomelo-pw`。流程使用较新能力时，先确认安装版本：
 
-## Flow File Format
+```bash
+pomelo-pw --version
+pomelo-pw validate path/to/flow.yaml
+pomelo-pw run path/to/flow.yaml --headless --json
+```
+
+如果 PATH 中其他 Python 环境的命令遮蔽了 uv 管理的工具，使用 `uv tool run pomelo-pw` 明确选择该工具，并在运行流程前确认其版本。刷新插件不会升级其他 Python 环境。
+
+遵循用户指定的浏览器模式和变量值。需要可见浏览器时省略 `--headless`。通过 `--var key=value`、`--base-url` 或 `-o <directory>` 显式覆盖配置；`--var` 的值始终是字符串。
+
+通过 CLI 查询准确参数：
+
+```bash
+pomelo-pw steps
+pomelo-pw spec wait
+pomelo-pw spec request
+```
+
+通过 Python 包执行需要 Python 3.12+ 和可用的 Chromium 浏览器。`pomelo-pw install` 安装 Playwright Chromium；源码环境和独立二进制可以使用检测到的系统 Chrome。安装应在实际执行流程的环境中进行。
+
+## 编写流程
+
+浏览器操作、查询、提取、分支、遍历和轮询优先使用原生步骤。对于原生步骤无法表达的数据转换或应用特有状态判断，使用 evaluate 函数。
 
 ```yaml
-name: flow-name
-description: Optional description
-output_dir: "output"
-headless: false
-
+name: smoke
 variables:
-  base_url: "https://the-internet.herokuapp.com"
-  run_id: "local"
-  username: "admin"
-
+  base_url: "https://example.com"
 steps:
   - type: navigate
-    url: "{{base_url}}/login"
-```
-
-### Variable Syntax
-
-Complete references preserve JSON types: `{{name}}`, `{{item.path}}`, `{{inputs.filter}}`, and `{{results.records[0].id}}`. Paths support identifier fields and nonnegative array indexes. Embedded references accept scalar text only. Use `\{{` for literal template openings. `inputs` and `results` are reserved input names.
-
-Input precedence: CLI/API overrides > current step variables > enclosing variables > data row > flow variables. CLI `--var` values remain strings.
-
-Pass data into browser functions through `args`; script source is literal:
-```yaml
-- type: evaluate
-  args:
-    token: "{{api_token}}"
-  script: "async ({token}) => { const response = await fetch(`/api?token=${encodeURIComponent(token)}`); return await response.json(); }"
-  save_as: response
-```
-
-`${ }` is reserved for host languages such as JavaScript and is not processed as flow variable syntax.
-
-`save_as` binds successful public JSON output (currently supported by evaluate, extract, request, poll and foreach); read it with `{{results.response}}`. Results are shared by nested steps and isolated between data rows. Child parameters resolve at execution; child local variables do not leak into siblings. Input definitions may reference other inputs; cycles fail. Results stay opaque, even if strings contain template syntax. Rebinding replaces a result; a failed write clears the old binding, while its arguments may read the previous snapshot.
-
-`evaluate.script` must be a synchronous or async function expression and explicitly return JSON data; use `return null` for no data. Omitted args passes no arguments; explicit null passes one null. Unsupported values, nonfinite numbers, and circular data fail. Migrate bare module bodies to functions and source interpolation to args; no compatibility adapters are provided.
-
-### Output Directory
-
-Screenshots save to `./<flow-name>/` by default (derived from filename).
-- `example/my-test.yaml` → `./my-test/`
-- Set top-level `output_dir` in the flow; it supports `{{variable}}` substitution.
-- `output_dir` resolves before execution and cannot read results.
-- Relative `output_dir` values are resolved from the command working directory.
-- Override a flow value with `-o /custom/path`.
-- Set top-level boolean `headless` to run without a visible browser; it defaults to `false`.
-- Override browser mode with `--headless`.
-
-## Available Steps
-
-| Step | Key Params | Description |
-|------|-----------|-------------|
-| `navigate` | `url` | Navigate to URL |
-| `screenshot` | `file` | Take screenshot |
-| `click` | `selector` | Click element |
-| `fill` | `selector`, `value` | Fill form field (clears first) |
-| `type` | `selector`, `value` | Type character by character |
-| `press` | `key` | Press keyboard key |
-| `wait` | - | Wait for conditions |
-| `scroll` | `direction`, `distance` | Scroll page |
-| `hover` | `selector` | Hover over element |
-| `select` | `selector`, one of `value` / `label` / `index` | Select dropdown option |
-| `check` / `uncheck` | `selector` | Toggle checkbox |
-| `evaluate` | `script`, optional `args`, `save_as` | Execute a browser function with JSON input/output |
-| `request` | `url`, optional method/query/headers/json/response | Share browser cookies and return HTTP response data |
-| `extract` | `selector`, optional mode/read/fields | Read a DOM value or mapped collection snapshot |
-| `set-viewport` | `width`, `height` | Set viewport size |
-| `save-state` | `file` | Save cookies + localStorage |
-| `load-state` | `file` | Restore saved auth state |
-| `if` | `condition`, `then` | Conditional execution |
-| `loop` | `steps`, `times`/`while` | Loop execution |
-| `poll` | `until`, `steps` | Bounded query rounds with fresh results |
-| `foreach` | `items`, `steps`, optional `as`, `index_as` | Serial array iteration with local bindings |
-
-## Step Details
-
-### select - Dropdown Options
-
-Provide `selector` and exactly one option selector:
-
-- `value`: the option's HTML `value` attribute
-- `label`: the option's exact visible text
-- `index`: the option's zero-based position
-
-```yaml
-# Prefer a stable option value when available
-- type: select
-  selector: "#country"
-  value: "cn"
-
-# Use the text shown to the user when no stable value is available
-- type: select
-  selector: "#country"
-  label: "China"
-
-# Use a zero-based position when the option value is created by an earlier UI step.
-- type: select
-  selector: "#course-adoption"
-  index: 1
-```
-
-### wait — Enhanced SPA Support
-
-Choose exactly one wait mode. For SPA readiness, combine observations under condition:
-
-```yaml
-- type: wait
-  condition:
-    all:
-      - page: {url_contains: "/items?page=2"}
-      - page: {element_visible: "table tbody tr"}
-      - js:
-          script: "({id}) => !document.querySelector('table').inert && document.querySelector('tr').dataset.id === id"
-          args: {id: "{{record.id}}"}
-  timeout: 5000
-  interval: 100
-```
-
-The shared tree uses fixed runtime snapshots and live page state. Single page/JS conditions use native Playwright waits; combinations check within one deadline. JS must return a boolean, keeps source literal and uses structured args. False means keep waiting; errors fail immediately. interval only applies to condition, state only to selector, route_stable_duration only to route_stable. Timing values are finite positive numbers (delay may be zero); flag modes require true. Mixed modes and string numbers are rejected without adapters.
-
-```yaml
-# Wait for element
-- type: wait
-  selector: ".dashboard"
-  timeout: 5000
-
-# Wait for URL
-- type: wait
-  url_contains: "/dashboard"
-
-- type: wait
-  url_pattern: "^/user/\\d+$"
-
-# Wait for network/animation
-- type: wait
-  network_idle: true
-
-- type: wait
-  animation_stable: true
-
-- type: wait
-  route_stable: true
-  route_stable_duration: 500
-
-# Fixed delay
-- type: wait
-  delay: 1000
-```
-
-### screenshot — Baseline Comparison
-
-```yaml
-# Take screenshot
-- type: screenshot
-  file: "page.png"
-  full_page: true
-
-# Compare with baseline
-- type: screenshot
-  file: "page-current.png"
-  baseline: "page.png"
-  threshold: 0.05        # 5% difference allowed
-  diff_output: "diff.png"
-  fail_on_diff: true
-```
-
-Requires Pillow: `pip install pomelo-pw[visual]`
-
-### save-state / load-state — Auth Reuse
-
-```yaml
-# Save after login
-- type: save-state
-  file: "auth.json"
-
-# Load in next flow (skip login)
-- type: load-state
-  file: "auth.json"
-```
-
-### if — Conditional Execution
-
-```yaml
-- type: if
-  condition:
-    page: {element_exists: ".cookie-banner"}
-  then:
-    - type: click
-      selector: ".accept-cookies"
-  else:
-    - type: screenshot
-      file: "no-banner.png"
-```
-
-Each condition is an object with exactly one operator:
-
-- `eq: [left, right]` / `ne: [left, right]`: recursive JSON equality, with no coercion; numbers share a type, but `false` differs from `0`.
-- `in: [value, array]`: array membership using the same equality rules.
-- `exists: "{{results.record.field}}"`: a complete reference; defined null/false/zero/empty values exist. Other operators fail on missing references.
-- `all: [condition, ...]` / `any: [condition, ...]`: non-empty lists, evaluated in order with short circuits; `not: condition` negates one object.
-- `page: {element_exists: selector}`: also supports `element_visible`, `element_hidden`, `url_contains`, `url_matches` (Python regex search), and `text_contains` (Playwright DOM text matching).
-- `js: {script: "({record}) => record.enabled === false", args: {record: "{{results.record}}"}}`: a synchronous or async function returning a boolean; source stays literal.
-
-Guard optional data with exists before accessing its fields. Static validation checks the whole tree, while runtime resolves only visited nodes. Page probes are immediate; visibility uses the first match and absent elements are hidden. Text probes use Playwright whitespace normalization, not HTML source. JS uses structured args and distinguishes omitted args from null. Old colon strings and bare JS expressions are rejected without compatibility adapters.
-
-### loop — Repeat Steps
-
-```yaml
-# Fixed count
-- type: loop
-  times: 5
-  steps:
-    - type: scroll
-      direction: down
-      distance: 300
-
-# While condition
-- type: loop
-  while:
-    page: {element_visible: ".load-more"}
-  max_iterations: 20
-  steps:
-    - type: click
-      selector: ".load-more"
-    - type: wait
-      network_idle: true
-```
-
-### foreach - Array Iteration
-
-```yaml
-- type: foreach
-  items: "{{results.records}}"
-  as: record
-  index_as: position
-  steps:
-    - type: evaluate
-      args: {record: "{{record}}", index: "{{position}}"}
-      script: "payload => payload"
-```
-
-Arrays are snapshotted on entry and traversed serially; empty arrays execute no children. Default names are `item`/`index`, with a zero-based index. Aliases must be distinct, non-reserved ASCII identifiers. Bindings override ordinary variables and CLI overrides, stay opaque, and are restored after nested loops. Old foreach times/while calls must use loop; loop requires exactly one mode, integer counts, and max_iterations only with while.
-
-Optional collect resolves once after each successful iteration in its item scope. Output is `{iterations, items}`; without collect, items is []. Bind it with save_as. max_collect_items defaults to 1000, max_collect_bytes to 1048576 JSON UTF-8 bytes (including array framing); both accept positive integer references and require collect. Exceeding a bound fails without replay or partial publication. Collect and child source stay literal until their execution scope.
-
-While checks its condition again after the last allowed iteration: false completes, true fails with exhaustion. There is no adapter for the old successful-exhaustion behavior.
-
-### poll - Bounded Queries
-
-```yaml
-- type: poll
-  until: {in: ["{{results.task.body.status}}", [ready, failed]]}
-  timeout: 30000
-  interval: 1000
-  max_attempts: 20
-  save_as: polling
-  steps:
-    - type: request
-      url: "/api/tasks/{{results.submitted.body.id}}"
-      save_as: task
-      retry: 2
-      retry_delay: 250
-```
-
-The non-empty body runs immediately, then until reads fresh results. False waits interval after the round. Timeout (default 30000ms) includes body, condition, retries and delays; interval defaults to 1000ms. Both are finite positive numbers; optional max_attempts is a positive integer. All bounds support complete typed references. Nested polls cannot extend the parent's deadline. Exhaustion fails; a true condition on the final round succeeds. Keep writes before poll and declare read retries on children; poll rejects parent retry parameters.
-
-Successful output is `{attempts, elapsed_ms, results}` with the body's latest successful bindings. Terminal business failures may satisfy until; handle outcomes in later branches. Failure details live in errors[].diagnostics.polls, including nested paths and prior successful values even after a failed rebind. At timeout no new operations start and late results are discarded; in-flight browser operations may finish, with late errors consumed. on_error=continue still reports an unsuccessful flow if any step failed.
-
-### request - Browser Session HTTP
-
-```yaml
-- type: request
-  url: /api/tasks
-  method: POST
-  headers: {Authorization: "Bearer {{token}}"}
-  json: {id: "{{record.id}}", enabled: false, metadata: null}
-  expected_status: 201
-  save_as: submitted
-```
-
-Prefer request for HTTP queries instead of generic fetch scripts. It shares the current BrowserContext Cookie storage, including response updates. Relative URLs use the current HTTP(S) page URL, not HTML base; absolute HTTP(S) URLs also work on about:blank. It bypasses page fetch, CORS, route handlers and Service Workers. Extra authentication headers are explicit; localStorage tokens are not copied. Redirects follow Playwright behavior, and checks apply to the final response.
-
-Defaults are GET, 30000ms, response: json and any 2xx status. Uppercase methods: GET/HEAD/POST/PUT/PATCH/DELETE/OPTIONS. query values are strings, finite numbers or booleans (encoded as lowercase true/false); headers values are strings. Both use non-empty string keys, and objects and nested fields accept typed references. json may be any JSON value, including null, and is forbidden with GET/HEAD; absent json sends no body. JSON Content-Type defaults to application/json unless supplied explicitly. expected_status accepts an integer or a non-empty integer list (100-599).
-
-Output is `{url, status, headers, body}`; use `{{results.task.body.status}}`. response: text reads text or empty responses; JSON errors never fall back to text. HTTP success does not imply business success. The finite request timeout also covers response reading and is clamped by poll's remaining budget. In-flight calls may finish after timeout; late responses are released, errors consumed and output discarded. There are no implicit retries; explicit retry may repeat writes, so callers own idempotency. retry_on filters RequestNetworkError/RequestTimeoutError/RequestStatusError/RequestResponseError. API responses are released without disposing the shared client. See the local fixture setup in example/README.md.
-
-### extract - DOM Data Snapshot
-
-```yaml
-- type: extract
-  selector: table tbody tr
-  mode: all
-  fields:
-    id: {read: attribute, attribute: data-id}
-    name: {selector: .name}
-    url: {selector: a, read: url, attribute: href}
-    status: {selector: .status, required: false, default: unknown}
-  save_as: records
-```
-
-Use extract for common DOM reads. It takes one synchronous snapshot without waiting or mutating the page; declare readiness with wait first. Root selector uses Playwright; field selectors are row-relative CSS, with :scope and no frame/Shadow DOM traversal. Omit the field selector to read the row. Field names are ASCII identifiers. fields and configuration values accept typed references and are checked at execution.
-
-mode defaults to one (strict single root); all returns DOM-order values or mapped objects, including [] for no roots. Without fields, read roots directly. read defaults to textContent text with trim: true (outer whitespace only); false preserves text. attribute reads raw strings; url requires attribute and resolves against element.baseURI including HTML base. value reads current input/textarea/select strings, without numeric or checkbox-state conversion; other elements fail. fields cannot combine with root read/attribute/trim; trim only applies to text.
-
-Missing roots/fields/attributes fail by default. required: false returns null or an explicit JSON default (default requires false); empty strings are valid and false/0/null defaults are preserved. Root settings do not override fields. Multiple field matches always fail with row/field locations; empty all remains []. Output binds directly to foreach/conditions/poll; retries are explicit, poll discards late snapshots, and ExtractError preserves browser read errors. See example/public/dom-data-extraction.yaml. No legacy script adapters are provided.
-
-### assert - Explicit Expectations
-
-```yaml
-- type: assert
-  condition: {eq: ['{{results.summary.failed}}', 0]}
-  message: Some records failed
-```
-
-Uses the shared structured condition tree and short circuits. Only false raises AssertionFailed with the condition and visited values/results; evaluation errors stay execution errors. Default message is Assertion failed. There is no implicit waiting or retry.
-
-### Execution Report and Exports
-
-```yaml
-outputs:
-  outcomes: '{{results.collected.items}}'
-  summary: '{{results.summary}}'
-report:
-  steps: true
-  max_steps: 1000
-  include_outputs: false
-```
-
-outputs explicitly exports named JSON values from the final runtime snapshot. Keys are ASCII identifiers; missing/invalid references add output errors while other fields still export. Business failed/skipped categories have no implicit effect on execution status; enforce policy with assert. Use foreach.collect to retain per-item outcomes, and a short evaluate for custom summaries.
-
-run --json stdout is one schema_version=1 JSON document; all execution logs go to stderr. Passed exits 0, failed exits 1. Report fields are status/flow/duration_ms/outputs/steps/trace/errors/errors_dropped/artifacts/rows/row_summary. steps contains top-level total/executed/completed. trace contains enabled/entries/dropped; entries contain path/type/status/duration_ms and optional output. Errors contain path/type/kind/error_type/message/diagnostics/evidence; continue retains all failures within the configured bound. artifacts.screenshots lists screenshots, and error evidence retains HTML. No success/failed_step or other legacy report fields remain. validate --json still uses valid/errors.
-
-report defaults to steps=false, max_steps=1000, include_outputs=false, max_value_bytes=16384 and max_errors=100. include_outputs requires steps=true. Retries record one final logical step; control step duration includes children. Trace/error overflow counts dropped details, large values mark omitted/bytes, and messages mark truncation. Explicit exports stay complete. Data-driven rows have independent reports plus label/index, and their own exports; row inputs are not exported automatically. Aggregated trace/errors include row identity and remain bounded. See example/public/flow-assertions-results.yaml.
-
-### Integrated Capability Example
-
-The repository's example/public/flow-capability-example.yaml combines typed references, conditions, foreach collection, page readiness, session HTTP requests, extract, poll, assertions and exports. Start example/support/flow_capability_server.py on loopback port 8767 and run the flow with --headless --json. See example/README.md for the full commands and port overrides.
-
-Default mixed has seven materials over two pages and exports inventory/outcomes/summary/audit, with ready=3/skipped=3/failed=1. failure_policy=fail converts the business failure into an assertion failure after complete exports; default report exits 0. scenario=empty/read-error/timeout exercises empty input, a query HTTP 503, or a pending task exceeding its budget. Infrastructure failures retain inventory and nested error evidence, while unpublished collection/summary exports explicitly fail to resolve.
-
-Wait for the matching page route and ready marker before extract. Place POST submissions outside poll and do not retry them implicitly. Resume existing tasks, collect each completed outcome once, and use the server audit to confirm no duplicate or overlapping submissions. Short evaluate functions transform snapshots and summarize data; they do not replace control steps. The fixture also saves browser state, removes its client Cookie, verifies 401, then restores the saved Cookie before data requests. Each login creates an isolated run; no real credentials or external services are needed.
-
-### Step-Level Retry
-
-Operation steps and if/loop/foreach support retry parameters; poll requires retries on its children:
-
-Retries on if/loop/foreach only cover the parent's own probe or setup. A child failure never replays completed branches or iterations; put retries on the individual operation. Nested errors include the step path and array index.
-
-```yaml
-- type: click
-  selector: ".flaky-button"
-  retry: 3
-  retry_delay: 1000
-  retry_on:
-    - "timeout"
-    - "element_not_found"
-```
-
-## Data-Driven Testing
-
-Run the same flow with multiple data sets:
-
-```yaml
-name: multi-user-test
-variables:
-  base_url: "https://the-internet.herokuapp.com"
-
-data:
-  - _label: "user-alice"
-    username: "alice@example.com"
-    password: "pass1"
-  - _label: "user-bob"
-    username: "bob@example.com"
-    password: "pass2"
-
-on_error: continue   # or "stop" (default)
-
-steps:
-  - type: navigate
-    url: "{{base_url}}/login"
-  - type: fill
-    selector: "#email"
-    value: "{{username}}"
+    url: "{{base_url}}"
+  - type: wait
+    condition: {page: {element_visible: "h1"}}
   - type: screenshot
-    file: "result-{{username}}.png"
+    file: page.png
 ```
 
-- Each row runs all steps independently
-- Output goes to `<output>/<_label>/` or `<output>/row-N/`
-- Row variables override flow `variables`; CLI/API overrides remain highest priority
-- Result includes `rows` and `row_summary: {total, executed, passed, failed}`
+遵循以下执行规则：
 
-## Error Context
+- 完整引用保留 JSON 类型；嵌入文本的引用只接受标量，CLI 覆盖值仍为字符串。
+- 浏览器脚本源码按字面量处理。使用函数表达式，通过 `args` 传入数据，并显式返回 JSON。省略 args 与传入 null 的含义不同。
+- if、while、wait、poll 和 assert 共用对象形式的条件。自定义 JS 判断函数必须返回布尔值。
+- extract 前先等待页面达到所需就绪状态。HTTP 读取使用 request，数组遍历使用 foreach，持续刷新结果直到终态使用 poll。
+- 先提交任务，再轮询。读取重试应显式配置在具体查询步骤上；子步骤失败不会重放已完成的分支或迭代。
+- 使用 foreach.collect 收集每项结果，使用顶层 outputs 导出。通过 assert 明确业务失败规则。
+- 每次执行都会创建新的浏览器状态。登录后保存状态，在后续流程中显式加载同一文件；会话过期时按应用的登录方式处理。
 
-On failure, automatically collects:
-- Current URL
-- Error screenshot (`error-step-N.png`)
-- HTML snapshot (`error-step-N.html`)
-- Console errors and network failures
+## 查看结果
 
-## Tips
+`run --json` 向 stdout 输出一个报告，日志写入 stderr。检查 `status: passed|failed`、`errors` 和 `outputs`；成功退出码为 0，失败为 1。API 调用返回相同结构的报告。
 
-- Use `pomelo-pw explore` first to find reliable selectors
-- Prefer `role=` and `text=` selectors over CSS classes
-- Use `save-state` / `load-state` to avoid repeated logins
-- Use `data:` field for parameterized runs across multiple users/environments
-- Use `if` to handle optional UI elements (cookie banners, modals)
-- Use `loop` + `while: {page: {element_visible: ".load-more"}}` to paginate; conditions read fresh results before each iteration
-- Use `retry: 3` on flaky steps instead of adding fixed delays
+通过错误路径和保留的截图、HTML 证据定位失败。详细执行轨迹可选，并有容量限制。业务数据中的 `failed` 计数不会自动使执行失败，需要通过断言明确该规则。
+
+执行修改后的 YAML 前应进行静态校验。静态校验不能证明认证有效、状态文件共享正确、页面已经就绪或基线可用。只执行用户授权的针对性检查和应用流程。

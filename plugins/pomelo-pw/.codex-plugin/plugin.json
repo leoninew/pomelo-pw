@@ -1,14 +1,17 @@
 {
   "name": "pomelo-pw",
-  "version": "0.3.1",
-  "description": "Flow-based UI automation workflows powered by the pomelo-pw CLI.",
+  "version": "0.4.0",
+  "description": "通过 pomelo-pw CLI 或 Python 包编写和运行基于 Playwright 的 YAML 浏览器流程。",
   "skills": "./skills/",
   "interface": {
     "displayName": "Pomelo PW",
-    "shortDescription": "Run Playwright browser automation flows.",
-    "longDescription": "Provides flow-based Playwright browser automation workflows through the pomelo-pw CLI.",
+    "shortDescription": "编写和运行 Playwright 浏览器自动化流程。",
+    "longDescription": "通过 pomelo-pw CLI 或 Python 包执行 YAML 浏览器流程，支持登录状态复用与结构化执行报告。",
     "category": "Developer Tools",
-    "capabilities": ["Read", "Write"],
-    "defaultPrompt": "Use Pomelo PW to create, validate, or run a browser automation flow."
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": "使用 Pomelo PW 编写、校验或运行浏览器自动化流程。"
   }
 }

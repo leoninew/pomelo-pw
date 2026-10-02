@@ -1,5 +1,5 @@
 {
   "name": "pomelo-pw",
-  "version": "0.3.1",
-  "description": "Flow-based UI automation workflows powered by the pomelo-pw CLI."
+  "version": "0.4.0",
+  "description": "通过 pomelo-pw CLI 或 Python 包编写和运行基于 Playwright 的 YAML 浏览器流程。"
 }

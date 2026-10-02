@@ -148,7 +148,7 @@ Pin the dependency version for deployed use; YAML must follow that version's syn
 
 Ordinary steps accept `retry`, `retry_delay` (milliseconds), and `retry_on` (error class names). Retries repeat the current step; child failures do not replay a completed branch or traversal. Put poll retries on child queries and submissions before polling. Callers must ensure idempotency for write retries.
 
-A top-level `data` array runs the flow independently for each row. Row fields override flow variables; `_label` names the output subdirectory. `on_error: stop` is the default. `continue` can run later top-level steps or data rows, but any execution error still fails the final report. See the [agent skill example](../plugins/pomelo-pw/skills/pomelo-pw/SKILL.md#data-driven-testing).
+A top-level `data` array runs the flow independently for each row. Row fields override flow variables; `_label` names the output subdirectory. `on_error: stop` is the default. `continue` can run later top-level steps or data rows, but any execution error still fails the final report. See the [agent skill example](../plugins/pomelo-pw/skills/pomelo-pw/references/reporting.md#data-driven-testing).
 
 ## Screenshot Baseline Comparison
 
