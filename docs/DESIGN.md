@@ -1,320 +1,109 @@
-# Pomelo PW - Flow-based UI Automation Tool
-最后修改时间: 2026-10-02 11:16:05
-
-## 项目概述
-
-Pomelo PW 是一个基于 Playwright 的流程化 UI 自动化工具，从 typing-island/scripts 抽取核心能力成为独立工具。
-
-**核心价值：**
-- 声明式 YAML 定义 UI 自动化流程
-- 类型安全的步骤规范与校验
-- 可扩展的步骤处理器架构
-- 灵活的变量替换系统
-- 支持 Claude Code、Codex 与 Grok Build 原生插件集成
-
----
-
-## 项目结构
-
-```
-pomelo-pw/
-├── pyproject.toml           # uv 项目配置
-├── Makefile                 # 构建命令
-├── README.md
-├── src/
-│   └── pomelo_pw/
-│       ├── __init__.py
-│       ├── cli.py           # CLI 入口
-│       ├── executor.py      # 流程执行器
-│       ├── runtime.py       # 运行时输入和结果快照
-│       ├── conditions.py    # 共享条件校验和求值
-│       ├── polling.py       # 轮询预算、进度和失败诊断
-│       ├── browser_functions.py # 浏览器函数及 JSON 传输
-│       ├── substitution.py  # 变量替换
-│       ├── config/          # 配置管理
-│       │   ├── __init__.py
-│       │   └── settings.py
-│       └── steps/           # 步骤模块
-│           ├── __init__.py
-│           ├── base.py      # 步骤基类
-│           ├── navigate.py
-│           ├── screenshot.py
-│           ├── click.py
-│           ├── fill.py
-│           ├── wait.py
-│           └── ...
-├── tests/                   # 单元测试
-├── example/                 # 示例流程
-└── docs/
-    └── DESIGN.md
-```
+# 架构设计
 
----
+[返回首页](../README_CN.md) | [开发指南](DEVELOPMENT_CN.md) | [流程参考](FLOW_REFERENCE_CN.md)
 
-## 设计原则
+本文面向实现和维护，说明模块职责、状态所有权与执行边界。命令和接入方式见[使用指南](USAGE_CN.md)，YAML 参数与对外数据契约见[流程参考](FLOW_REFERENCE_CN.md)。
 
-### 配置分离
+## 模块职责
 
-| 配置类型 | 位置 | 用途 |
-|----------|------|------|
-| **工具配置** | 内置默认值 | 浏览器行为、视口、超时等运行参数 |
-| **流程配置** | `flow.yaml` | 变量定义、步骤序列、`output_dir`、`headless` |
-| **运行时配置** | CLI 参数 | 变量覆盖、输出路径、浏览器模式 |
+| 模块 | 职责 |
+| --- | --- |
+| [cli.py](../src/pomelo_pw/cli.py) | 命令参数、文本/JSON 输出和退出码 |
+| [executor.py](../src/pomelo_pw/executor.py) | 加载、递归校验、参数解析、步骤调度与结果发布 |
+| [browser.py](../src/pomelo_pw/browser.py) | 统一创建 Chromium 与 BrowserContext |
+| [config/](../src/pomelo_pw/config/) | 工具默认配置与本机浏览器选择 |
+| [steps/base.py](../src/pomelo_pw/steps/base.py) | StepSpec、StepContext、StepResult 与步骤注册 |
+| [runtime.py](../src/pomelo_pw/runtime.py) | 分层输入、结果快照和 JSON 数据边界 |
+| [substitution.py](../src/pomelo_pw/substitution.py) | 类型化引用、路径解析和输入循环引用检查 |
+| [conditions.py](../src/pomelo_pw/conditions.py) | 共享条件校验、求值与页面条件等待 |
+| [browser_functions.py](../src/pomelo_pw/browser_functions.py) | 页面函数调用与 JSON 参数传输 |
+| [polling.py](../src/pomelo_pw/polling.py) | 截止时间、轮询进度和失败诊断 |
+| [reporting.py](../src/pomelo_pw/reporting.py) | 统一执行报告、有界轨迹与错误集合 |
+| [error_context.py](../src/pomelo_pw/error_context.py) | 失败截图、HTML、console 和网络证据 |
 
-### 工作目录模型
+步骤模块实现单次操作或描述控制体，执行器负责调度。CLI 与 Python API 共用 `FlowExecutor.run_flow()`，各步骤不另建流程运行入口。
 
-```
-用户工作目录/
-├── example/            # 示例流程（可选）
-│   └── my-flow.yaml
-└── my-flow/            # 默认输出目录（按 flow 文件名）
-    └── screenshots/
-```
+## 执行生命周期
 
-Flow 可以在顶层用 `output_dir` 覆盖默认输出目录；相对路径以用户工作目录解析，支持 `{{variable}}`。CLI `-o/--output` 的优先级高于 flow 配置。Flow 还可以用布尔型 `headless` 指定浏览器模式，未配置时默认显示浏览器；CLI `--headless` 的优先级更高。
+1. 加载 YAML，递归校验顶层配置、步骤规范、输入与结果绑定声明。
+2. 合并调用方覆盖值，解析输出目录与浏览器模式。
+3. 启动浏览器；每次普通执行或 data 行创建独立 BrowserContext 和 RuntimeContext。
+4. 调度步骤，在执行时解析参数、校验解析后的类型并执行单步重试。
+5. 发布成功输出，再调度分支、集合或轮询控制体；记录逻辑步骤与失败证据。
+6. 解析显式导出，形成报告并清理浏览器资源；启动和清理失败也返回统一报告。
 
----
+工具配置、流程配置和调用方覆盖值分别由 config、YAML 与 CLI/API 持有。相对输出路径以执行器的 `work_dir` 为基准，具体优先级见[使用指南](USAGE_CN.md)。
 
-## 核心组件
+## 步骤协议与校验
 
-### 1. 步骤系统
+`StepSpec` 声明参数、别名、是否产生公开输出，以及哪些字段是子步骤或原文。静态校验可以检查未来结果引用的结构，但不提前要求结果存在；依赖执行数据的值在参数解析后再次校验。
 
-每个步骤继承 `BaseStep`，定义 `StepSpec` 规范：
+`child_step_params` 使子步骤延迟解析并接受递归校验，避免在父步骤执行前解析尚未产生的数据。`literal_params` 保留函数源码、条件树和收集表达式，由相应模块在正确时机解析。
 
-```python
-@register_step
-class NavigateStep(BaseStep):
-    spec = StepSpec(
-        name="navigate",
-        description="Navigate to a URL",
-        required_params=["url"],
-        optional_params={"timeout": 30000},
-    )
-```
+`StepResult` 的三类数据有独立用途：
 
-### 2. 类型化输入与结果
+- `output` 是可供后续流程读取的 JSON 数据；`NO_OUTPUT` 与 JSON null 有区别。
+- `control` 描述分支或循环调度，交由执行器处理。
+- `diagnostics` 保存运行诊断和取证信息，不作为隐式业务输出。
 
-每次执行创建 `RuntimeContext`，分层持有输入及独立结果；data-driven 每行新建上下文。输入优先级：
+## 运行时状态与作用域
 
-```
-CLI/API 覆盖 > 当前步骤变量 > 最近外层步骤变量 > data 行 > flow 变量
-```
+`RuntimeContext` 分开持有配置输入和结果。每个 data 行新建上下文，嵌套步骤共享当前行的结果；`StepContext.scopes` 保存普通局部变量，兄弟步骤不共享这些局部定义。
 
-`{{name}}`、`{{item.path}}`、`{{inputs.filter}}`、`{{results.records[0].id}}` 的完整引用都保留 JSON 类型；文本拼接只接受标量。字段和非负下标组成路径，不支持表达式或通用 JSONPath。输入定义可以递归引用并检测循环；已返回的数据不再次解析。`inputs`/`results` 为保留的输入根名称。普通文本用 `\{{` 转义，`${...}` 不处理。
+`StepContext.bindings` 保存集合元素与索引。它们独立于配置输入，并作为不透明数据传给引用解析器；嵌套遍历遮蔽同名绑定，退出时恢复外层绑定。进入遍历时复制数组，每轮复制元素，写回来源结果不会改变活动遍历。
 
-`StepContext` 共享 runtime，以 scopes 保存逐层局部变量；兄弟步骤不共享局部变量。`StepSpec.child_step_params` 标明需要延迟解析和递归校验的子步骤字段；`literal_params` 标明原文字段，如 evaluate.script。顶层及嵌套执行都走 `_execute_step()`。
+结果发布由执行器统一负责。步骤执行前捕获旧结果供参数读取，并清除待写绑定；最终成功后仅发布 JSON 快照，失败时保持绑定缺失。返回字符串不再解释成模板，避免数据被意外执行或重新替换。
 
-`StepResult.output` 为唯一公开输出，`NO_OUTPUT` 表示没有输出，区别于 null；control 为分支和循环调度，diagnostics 为 console、截图对比、状态文件等信息。`StepSpec.produces_output` 声明能否使用 `save_as`。执行前捕获旧结果读取快照并清除待写绑定，成功重试结束后仅发布最终 JSON 快照；失败保持绑定缺失。
+JSON 值在输入、浏览器传输和输出发布边界校验并复制。参数通过结构化载荷传入页面函数，不拼接到源码；浏览器和 Python 两端都检查返回值。引用规则见[流程参考](FLOW_REFERENCE_CN.md#运行时数据)。
 
-`evaluate` 只接受同步或 async 函数表达式，args 是单个结构化 JSON 载荷。统一的浏览器包装器读取 script、args 和 hasArgs，再按有无参数调用函数；不拼接业务数据到源码。返回前检查 JSON 数据，Python 再校验和复制；console 监听器在 finally 中移除。无参数与显式 null 不同，不注入模块脚本，不改写末尾 return。
+## 条件、等待与轮询
 
-Python 调用迁移到 `StepContext.runtime`/`inputs` 及 `StepResult.output`/`control`/`diagnostics`；旧 data 和变量快照接口不保留适配。YAML 源码插值改为 args，裸脚本改为函数；CLI 覆盖现在统一高于行和局部输入。
+| 执行形式 | 观察对象 | 快照时机与调度职责 |
+| --- | --- | --- |
+| if / while / assert | 输入、结果与页面 | 单次求值使用一份数据快照；while 每轮重新取快照 |
+| wait.condition | 实时页面 | 输入、结果与迭代绑定固定；只观察，不执行查询步骤 |
+| poll | 查询步骤产生的新结果 | 执行完整控制体后重新取快照，再判断是否继续 |
 
-### 3. 结构化条件
+`conditions.py` 统一校验和求值。组合条件顺序短路，运行时只解析访问到的节点，静态校验仍检查整棵树。断言观察值在同一次求值中记录，不重新读取节点或访问短路分支。
 
-`conditions.py` 提供 `validate_condition()` 与 `evaluate_condition()`。if.condition 和 loop.while 使用恰好包含一个操作符的对象，不识别旧冒号字符串或裸 JS 表达式。数据操作符为 eq/ne/in/exists，组合为 all/any/not，页面检查位于 page，自定义函数谓词位于 js。
+单个页面或 JS 等待使用 Playwright 原生等待；组合条件使用共享 evaluator 与统一截止时间。Playwright 原生轮询需要同步布尔结果，因此异步 JS 包装器保存 pending 状态，等待函数完成后再检查，不并行启动未完成的探测。
 
-JSON 相等递归区分布尔和数字，数字 1 与 1.0 相等；in 仅接受数组。exists 仅将路径缺失转成 false，已定义的 null/false/0/空值为 true。非法路径、循环引用和其他判断中的缺失引用均失败。all/any 非空并按顺序短路；validate 检查整棵树的结构，实际求值只解析访问到的操作数，业务数据对象不解释为条件。
+浏览器参数在需要时编码为 JSON 后解码，避免 Playwright 的参数过滤省略嵌套 null。函数调用保留无参数与显式 null 的区别。具体时序与错误语义见[流程参考](FLOW_REFERENCE_CN.md#页面条件等待)。
 
-通过现有 `literal_params` 保留原始 condition/while，直到求值时才解析。每次求值获取一份有效输入和结果快照，同一组合复用此快照；while 每轮执行循环体前重新获取，读取上一轮已发布的结果。执行器调用公共入口，不再依赖 ConditionalStep 的私有方法。
+## 重试与副作用边界
 
-页面条件用 Playwright locator 作即时探测，可见性以首个匹配元素为准，缺失视为隐藏；text_contains 使用 DOM 文本匹配及其空白归一化规则，不再查询 HTML 源码。条件入口不定义等待或轮询时序。
+`_execute_with_retry()` 只执行步骤自身。`_execute_step()` 在单步重试完成后调度控制体，因此子步骤失败不会让父控制步骤重放已完成的分支、迭代或写操作。子步骤有独立重试策略。
 
-`browser_functions.py` 共享函数调用包装器，evaluate 与 js 谓词均通过独立 args 传递数据，保持无参数与显式 null 的区别；js 必须返回布尔值。错误保留条件节点路径。循环耗尽和统一报告不由条件模块接管。
+`foreach.collect` 在每项完整成功后的作用域中读取一次并复制结果。集合数量和 JSON 字节预算逐项检查，超限不发布部分集合，也不重放已完成的操作。
 
-### 4. 集合与重试边界
+轮询首次立即查询，每轮串行完成后才考虑下一轮。`StepContext.polls` 传递各层进度，执行器按最早截止时间收紧原生 timeout，并覆盖控制体、条件、重试间隔和轮询间隔。轮询步骤自身不承担重试，查询步骤可以显式重试。
 
-`foreach` 独立于 loop，使用 items/steps 和静态 as/index_as 标识符。进入时复制数组快照，按顺序串行执行，空数组执行零次；索引从 0 开始。loop 必须指定 times 或 while 之一，次数为非负整数，while 上限为正整数，max_iterations 不与 times 混用。foreach 不再注册为 loop 别名。
+在途协议调用通过 shield 保留，完成回调消费迟到异常；结果发布与后续调度留在调用端。超时后不开始新操作或发布迟到结果，但已经发出的浏览器操作可能完成。执行器不撤销副作用，也不推断写操作是否幂等。
 
-`StepContext.bindings` 持有当前嵌套集合的运行时绑定，独立于 scopes 配置定义。绑定优先于普通变量与 CLI，内层同名绑定遮蔽外层，退出恢复；普通变量仍遵循既有优先级。引用解析器将绑定作为不透明数据，完整引用、字段和下标不重新解释字符串，条件使用同样的绑定快照。每轮复制元素，回写结果不改变活动集合。
+轮询诊断保留每层最近成功结果，独立于 runtime 的失败重绑定清理。失败沿嵌套路径携带预算、阶段和最近结果；`on_error: continue` 只影响后续调度，不把最终失败改成成功。
 
-`_execute_with_retry()` 只执行单一步骤自身，`_execute_step()` 在重试完成后调度控制体；子步骤有各自重试边界。父控制步骤不会因子步骤失败重放已经完成的分支/迭代/写操作。集合通过 index-N 和子步骤路径定位错误。foreach.collect 保持原文，在每项完整成功后的作用域中解析一次并复制结果，返回 {iterations,items}；未配置 collect 时 items 为空。数量上限在下一项开始前检查，JSON UTF-8 字节上限包含数组括号和分隔符，逐项累加检查。超限抛 CollectionLimitError，不重放已完成的操作或发布部分集合。
+## 页面与请求适配
 
-### 5. 页面条件等待
+`request` 使用当前 BrowserContext 的 APIRequestContext，复用 Cookie 及响应 Cookie 更新。URL 由标准解析器处理，不通过页面 fetch；响应读完后释放 APIResponse，不销毁共享请求客户端。总预算覆盖请求与读取，并服从外层轮询预算。
 
-`wait.condition` 直接消费共享条件树，literal_params 保留条件与 JS 原文。`wait_for_condition()` 在开始时复制运行时输入、结果及迭代绑定，实时观察页面；单一 page 条件使用 Locator.wait_for / Page.wait_for_url，URL 只等待 commit，单一 JS 条件使用共享严格布尔包装和 Page.wait_for_function，并释放句柄。
+`extract` 使用一次同步 `evaluate_all` 回调取得根集合并映射字段，字段之间没有 await。根 selector 使用 Playwright，行内字段使用浏览器相对 CSS；配置通过结构化参数传入，原生错误带行和字段位置传播。
 
-Playwright 原生轮询同步判断谓词返回值，包装器必须返回实际布尔值，不能直接返回 Promise。同步结果直接校验；异步结果保存在单次等待的参数对象上，pending 时返回 false，完成后仅 true 结束等待，false 继续，错误在下一次探测传播；不会并行发起未结束的调用。原生等待的 args 在传输边界统一使用 JSON 编码，每次调用解码，避免等待接口组装参数时递归删除 None，保留缺省/null 及嵌套 JSON 数据。
+两者都复用结果发布、重试、轮询预算和取证机制。认证头、页面就绪以及业务类型转换由流程显式表达；用户可见边界见[请求](FLOW_REFERENCE_CN.md#浏览器会话-http-请求)与[提取](FLOW_REFERENCE_CN.md#dom-数据提取)参考。
 
-组合条件使用现有 evaluator，按 interval 重查，asyncio.timeout 将探测和等待限制在一个截止时间内；只有 false 才继续，错误立即传播。原生叶节点使用 Playwright 自身时限；组合探测通过 shield 保留在途 Playwright 调用，在外层超时/取消后消费迟到异常，避免取消协议 Future 后出现未取回异常。等待退出不强制终止页面用户函数，谓词应只观察页面。组合探测仅对明确的导航销毁执行上下文错误重试，关闭页面或业务 JS 错误不会转成未就绪。超时包括条件与时限，错误仍走顶层既有截图/页面/console/network 证据收集。
+## 报告与失败取证
 
-WaitStep 按字段存在性校验恰好一种原生模式，拒绝多模式、null 开关、非法枚举、字符串数字和无效范围；state、interval、route_stable_duration 限定对应模式。不做优先级适配或旧条件转换。animation_stable 使用 document.getAnimations() 观察运行中或 pending 的动画。页面等待不执行查询步骤、不更新结果，数据刷新轮询属于 T05。
+`ExecutionReport` 由 `StepContext.report` 共享。步骤开始时预留轨迹条目以保持嵌套顺序，结束时记录最终逻辑状态与单调时钟耗时；重试中间态不另写轨迹。控制步骤耗时包含子步骤执行。
 
-### 6. 有界步骤轮询
+嵌套错误沿因果链保留最深步骤位置与轮询诊断。顶层失败触发截图和 HTML 取证；取证失败追加证据，不覆盖原始原因。data 行独立报告，顶层合并时保留行定位并继续约束轨迹和错误数量。
 
-`poll` 的 until 为原文共享条件树，steps 是非空延迟解析控制体；首次立即查询，每轮完整执行后获取新快照判断终止条件。interval 从未满足的一轮完成时起计算，不并发启动新查询。timeout 使用单调时钟，max_attempts 为可选附加上限；最后一轮条件满足仍成功。
+流程结束时固定 inputs/results 快照，逐字段解析显式 `outputs`。导出失败追加报告错误，其他字段仍尝试导出；业务分类与执行状态没有隐式关联。显式导出不自动公开所有输入或运行时数据。
 
-`StepContext.polls` 传递各层 PollProgress。执行器在步骤、重试和探测前后检查最早截止时间；asyncio.timeout_at 覆盖控制体、条件、retry_delay 和 interval，原生 timeout 按剩余预算收紧。控制体仍在父步骤重试边界之外，poll 拒绝父 retry，只允许子查询显式重试。foreach 和分支保留作用域、绑定及预算。
+轨迹、错误与可选步骤输出有独立数量或字节预算，省略详情不改变状态；业务集合超限和显式导出错误则按执行失败处理。对外字段、默认值与退出码统一在[报告参考](FLOW_REFERENCE_CN.md#断言与执行报告)维护。
 
-在途单步骤和条件探测通过 shield 保留协议调用并消费迟到异常，结果发布和控制体调度留在调用端；超时后不开始新操作或发布迟到结果。页面 JS 和已经发出的浏览器操作可能继续完成，不提供副作用撤销或幂等性推断。
+## 扩展约定
 
-每次轮询体成功发布 save_as 时，为活动的各层轮询保存独立最近结果；失败重绑定仍按 T01 清除 runtime 绑定，但诊断保留之前成功的值。成功 poll 输出 attempts/elapsed_ms/results，可再次 save_as。PollError 沿嵌套路径保留各层诊断，统一报告 errors[].diagnostics.polls 包含条件、预算、阶段、路径和最近结果。on_error=continue 只影响是否继续调度，任何步骤失败后最终 status 仍为 failed。
+新增步骤继承 `BaseStep`，声明 `StepSpec`，用 `register_step` 注册，并在 `steps/__init__.py` 导入模块。步骤通过 `StepContext` 使用现有页面、运行时、输出目录和轮询预算，不另建不受调度器管理的浏览器或运行时。
 
-while 在 max_iterations 后再检查一次条件，false 正常完成、true 明确耗尽失败。固定 times 不变；不保留旧耗尽成功语义的适配。业务失败终态可以正常结束 poll，由后续分支或断言确定业务结果。
+有公开输出的步骤声明 `produces_output` 并返回 `StepResult.output`；控制步骤通过 `control` 描述子步骤。新增引用、条件、重试或报告规则应进入共享模块，保持顶层和嵌套执行一致。
 
-### 7. 浏览器会话 HTTP 请求
-
-`request` 通过当前 `page.context.request.fetch` 复用 Cookie 及响应 Set-Cookie 更新，不创建独立客户端、不读取 localStorage token。使用标准 urljoin/urlsplit 解析相对地址，基准为当前 HTTP(S) page.url，与页面 base 标签无关；绝对 HTTP(S) 地址不要求页面已导航。请求不经过页面 fetch、CORS、page.route 或 Service Worker，重定向和查询参数处理使用 Playwright 契约。
-
-字段在步骤执行时按现有 resolver 解析；query/headers 接受对象完整引用，子字段保留类型，运行前再次校验。query 的布尔值通过标准 JSON 序列化为小写 true/false，其他标量交给 Playwright 编码。json 使用标准序列化明确发送 null 与嵌套 JSON；GET/HEAD 禁止请求体，不增加 data/form/multipart 别名。缺省 GET/30000ms/json/2xx，expected_status 可声明整数或非空列表，先检查状态再读取响应。输出仅包含 url/status/headers/body，JSON 与 text 保持同一个结构，不自动解析降级。
-
-asyncio.timeout_at 覆盖请求和响应读取，Playwright fetch 使用有限的原生 timeout；执行器现有逻辑按 poll 剩余预算收紧并阻止迟到结果发布。在途任务通过 shield 保留协议调用，强引用集合持有到完成，回调消费迟到异常；截止时间后不再解析迟到响应。APIResponse 在 finally 中释放，不销毁共享 APIRequestContext。错误分类为 RequestNetworkError/RequestTimeoutError/RequestStatusError/RequestResponseError，沿现有嵌套步骤定位和 CLI 失败出口传播；请求消息不主动输出头或 body。显式 retry 复用现有单步骤语义，默认没有请求重试；幂等性由调用方决定。
-
-### 8. DOM 数据提取
-
-`extract` 以 `page.locator(selector).evaluate_all` 取得根集合，在单个同步回调内检查匹配数并映射所有字段，没有跨字段 await。根 selector 使用 Playwright，行内字段使用浏览器原生 querySelectorAll 的相对 CSS（可用 :scope），不跨 iframe/Shadow DOM。字段配置作为结构化参数传入，不拼接数据到源码；无自动等待、DOM 写操作、转换语言或兼容分支。
-
-one 默认严格单元素，all 按 DOM 顺序返回数组（可空）；无 fields 时返回读取值，有 fields 时返回 ASCII 字段名映射的对象。text 为 textContent，trim 仅去首尾；attribute 为原始属性，url 按 baseURI 解析，value 为 input/textarea/select 当前字符串。读取格式、属性、字段配置和 required/default 经静态及运行时校验；缺失默认失败，optional 返回明确 default 或 null，空串仍是值，多匹配始终失败。根的缺失配置不覆盖字段配置。
-
-参数对象在传输边界编码为 JSON 字符串，浏览器回调内解码，避免 Playwright 的参数过滤递归省略 None 键，保留显式 null 默认值。原生读取错误转为 ExtractError，保留行与字段位置，沿既有嵌套路径和失败证据传播。结果使用 T01 JSON 快照与 save_as 契约，默认没有重试；poll 复用执行器既有总预算和迟到结果丢弃逻辑。快照只覆盖当前提取，不保证后续步骤仍观察到同一页面，页面就绪和类型转换由调用方表达。
-
-### 9. 断言与结构化执行报告
-
-assert.condition 使用共享条件 evaluator 的一次运行时快照；可选 observations 仅记录访问过的操作数和节点结果，不重新求值、不访问短路分支。只有 false 抛 AssertionFailed，并携带 condition/observed；缺失引用、JS 非布尔和页面错误保留执行错误语义。message 通过普通参数解析，断言没有隐式等待或重试。
-
-`reporting.py` 定义唯一 RunReport 结构：schema_version/status/flow/duration_ms/outputs/steps/trace/errors/errors_dropped/artifacts/rows/row_summary，不保留旧字段。StepContext.report 共享有界 ExecutionReport，_execute_step 包装完整逻辑步骤，开始时预留 trace 条目保证嵌套顺序，最终记录通过/失败与单调时钟耗时；重试中间态不写入轨迹。poll 截止时间检查和结果发布仍在调用端，迟到操作不触发报告更新。
-
-顶层 steps 统计 total/executed/completed；子步骤由轨迹路径定位。嵌套 ExecutionStepError 沿因果链携带最深步骤位置，PollError 保留多层轮询诊断；错误包含 path/type/kind/error_type/message/diagnostics/evidence。每次顶层失败收集截图与 HTML，失败取证本身发生错误也不覆盖原原因；continue 追加所有失败。截图归入 artifacts，启动和清理失败亦产生统一报告。
-
-结束时固定 inputs/results 快照，逐字段解析 flow.outputs 并导出 JSON；导出失败追加 output 错误，其他字段继续。显式 exports 不自动公开所有输入或 runtime 结果，不静默截断；业务分类与报告 status 无隐式关联。
-
-report 缺省 steps=false/max_steps=1000/include_outputs=false/max_value_bytes=16384/max_errors=100。轨迹和错误受数量上限约束，省略详情计数不改变失败状态；输出及诊断超过字节上限标记 omitted/bytes，消息截断有标记。foreach 的业务集合由独立上限约束。data-driven 各行独立报告带 label/index，顶层汇总 steps/artifacts/errors/trace 和 row_summary，错误/轨迹带行定位且合并后仍有界；行输入不自动导出。
-
-CLI run --json 用 stdout 重定向将执行及 console 日志写入 stderr，最后 stdout 只输出一份 JSON；失败退出 1、成功退出 0。普通文本摘要读取新结构，validate --json 保留独立 valid/errors 结构。
-
-### 10. 流程执行
-
-`FlowExecutor` 负责加载、校验、执行流程：
-
-- 加载 YAML 流程文件
-- 递归校验步骤结构、局部输入及结果绑定声明
-- 执行时解析参数；子流程及函数源码保持原文
-- 逐步执行并收集结果
-
----
-
-## CLI 命令
-
-| 命令 | 功能 |
-|------|------|
-| `run` | 执行流程文件 |
-| `validate` | 验证流程文件 |
-| `install` | 安装 Playwright 浏览器 |
-| `steps` | 列出可用步骤 |
-| `spec <step>` | 查看步骤规范 |
-
----
-
-## 步骤清单
-
-| 步骤 | 必需参数 | 描述 |
-|------|----------|------|
-| `navigate` | `url` | 导航到 URL |
-| `assert` | `condition` | 检查预期，失败记录访问过的值 |
-| `screenshot` | `file` | 截图 |
-| `click` | `selector` | 点击元素 |
-| `fill` | `selector`, `value` | 填充表单 |
-| `type` | `selector`, `value` | 逐字输入 |
-| `press` | `key` | 按键 |
-| `wait` | - | 等待条件 |
-| `scroll` | - | 滚动页面 |
-| `hover` | `selector` | 悬停 |
-| `select` | `selector`，`value`、`label` 或 `index` 三选一 | 按 HTML value、可见文本或从零开始的选项序号选择下拉选项 |
-| `check` | `selector` | 勾选复选框 |
-| `uncheck` | `selector` | 取消勾选 |
-| `evaluate` | `script` | 执行函数表达式，可用 args 传参、save_as 绑定 JSON 输出 |
-| `request` | `url` | 复用浏览器 Cookie，请求 JSON/文本并绑定 url/status/headers/body |
-| `extract` | `selector` | 同步读取文本、属性、URL、表单值或映射对象数组 |
-| `poll` | `until`, `steps` | 有界查询轮询，可用 save_as 绑定轮次、耗时和最近结果 |
-| `set-viewport` | - | 设置视口 |
-
-`select` 的 `value` 对应 option 的 HTML `value` 属性；`label` 对应用户可见的精确选项文本；`index` 对应从零开始的选项序号。三者必须且只能提供一个。
-
----
-
-## 流程文件示例
-
-```yaml
-name: login-test
-description: Login verification flow
-
-variables:
-  base_url: "http://localhost:3000"
-  username: "admin"
-  password: "admin123"
-
-steps:
-  - type: navigate
-    url: "{{base_url}}/login"
-
-  - type: screenshot
-    file: "01-login.png"
-
-  - type: fill
-    selector: "input[name='username']"
-    value: "{{username}}"
-
-  - type: fill
-    selector: "input[name='password']"
-    value: "{{password}}"
-
-  - type: click
-    selector: "button[type='submit']"
-
-  - type: wait
-    url: "/dashboard"
-
-  - type: screenshot
-    file: "02-dashboard.png"
-```
-
----
-
-## 错误处理
-
-- **默认中断**: 步骤失败立即终止流程
-- **变量未声明**: 抛出 `UndefinedVariableError`
-- **循环引用**: 抛出 `CircularReferenceError`
-- **URL 校验**: 必须为绝对路径
-
----
-
-## 使用方式
-
-```bash
-# 安装并运行
-uvx pomelo-pw install
-uvx pomelo-pw run flow.yaml
-
-# 验证流程
-uvx pomelo-pw validate flow.yaml
-
-# 覆盖变量
-uvx pomelo-pw run flow.yaml --var base_url=https://prod.example.com
-
-# JSON 输出
-uvx pomelo-pw run flow.yaml --json
-```
-
----
-
-## 开发命令
-
-```bash
-make install     # 安装依赖和浏览器
-make test        # 运行测试
-make lint        # 代码检查 (ruff + mypy)
-make check       # 全部检查 (lint + test)
-```
-
----
-
-## 已确认决策
-
-| 决策项 | 选择 |
-|--------|------|
-| 浏览器 | 仅 Chromium |
-| 截图命名 | 用户指定 |
-| 错误处理 | 默认中断 |
-| 变量声明 | 必须显式声明 |
-| 运行方式 | uvx |
+用户用法与参数更新进入使用指南或流程参考，运行前置条件进入示例说明，模块职责和机制变化才更新本文。旧接口不提供兼容适配；历史需求、方案和验证证据保存在各自过程目录。
