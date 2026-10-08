@@ -1,5 +1,7 @@
 """Tests for shared Playwright browser setup."""
 
+import time
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -61,8 +63,8 @@ class TestBrowserLifecycle:
         browser.new_context.assert_awaited_once_with(viewport={"width": 1920, "height": 1080})
 
     @pytest.mark.asyncio
-    async def test_executor_closes_context_when_page_setup_fails(self) -> None:
-        """Executor closes its context when creating a page raises unexpectedly."""
+    async def test_executor_closes_context_when_page_setup_fails(self, tmp_path: Path) -> None:
+        """Executor reports page setup failures and closes its context."""
         from pomelo_pw.executor import FlowExecutor
 
         executor = FlowExecutor()
@@ -71,22 +73,32 @@ class TestBrowserLifecycle:
         context.close = AsyncMock()
         context.new_page = AsyncMock(side_effect=RuntimeError("page setup failed"))
 
-        with (
-            patch.object(
-                executor.browser_lifecycle,
-                "new_context",
-                new=AsyncMock(return_value=context),
-            ),
-            pytest.raises(RuntimeError, match="page setup failed"),
+        with patch.object(
+            executor.browser_lifecycle,
+            "new_context",
+            new=AsyncMock(return_value=context),
         ):
-            await executor._run_once(
+            result = await executor._run_once(
                 browser=browser,
                 flow={"name": "test"},
-                flow_path=MagicMock(stem="test"),
+                flow_path=tmp_path / "test.yaml",
                 steps=[],
                 overrides={},
-                output=MagicMock(),
-                start_time=0,
+                output=tmp_path,
+                start_time=time.time(),
             )
 
         context.close.assert_awaited_once()
+        assert result["status"] == "failed"
+        assert result["steps"] == {"total": 0, "executed": 0, "completed": 0}
+        assert result["errors"] == [
+            {
+                "path": "flow",
+                "type": "flow",
+                "kind": "startup",
+                "error_type": "RuntimeError",
+                "message": "page setup failed",
+                "diagnostics": {},
+                "evidence": {},
+            }
+        ]

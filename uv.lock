@@ -478,7 +478,7 @@ wheels = [
 
 [[package]]
 name = "pomelo-pw"
-version = "0.28.2"
+version = "0.28.4"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
